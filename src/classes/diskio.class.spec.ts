@@ -12,7 +12,7 @@ describe('DiskIO class', () => {
         });
 
         it('should instance a DiskIO class', () => {
-            const diskio = new DiskIO('./mocks', 10 * 1024);
+            const diskio = new DiskIO('./mocks', 10 * 1024 * 1024);
             expect(diskio).toBeInstanceOf(DiskIO);
         });
     });
