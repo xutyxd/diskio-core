@@ -11,8 +11,9 @@ describe('DiskIO class', () => {
             expect(() => new DiskIO('./mocks/video-a.mp4', 100)).toThrow('The path is not a directory');
         });
 
-        it('should instance a DiskIO class', () => {
+        it('should instance a DiskIO class', async () => {
             const diskio = new DiskIO('./mocks', 10 * 1024 * 1024);
+            await diskio.ready;
             expect(diskio).toBeInstanceOf(DiskIO);
         });
     });
