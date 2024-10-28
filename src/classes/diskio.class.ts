@@ -10,6 +10,7 @@ const exec = promisify(child_process.exec);
 
 export class DiskIO implements IDiskIO {
     private RESERVED_FILE = 'diskio.dat';
+    private RESERVED_SIZE;
     private path: { folder: string, diskio: string };
     private optimal = 4096;
 
@@ -37,6 +38,7 @@ export class DiskIO implements IDiskIO {
         if (size <= 0) {
             throw new Error('The size must be positive');
         }
+        this.RESERVED_SIZE = size;
         // Set paths
         this.path = {
             folder: path,
@@ -183,8 +185,11 @@ export class DiskIO implements IDiskIO {
     }
 
     public async delete(fh: FileHandle, name: string) {
-        // Remove the file
+        // Close the file handle
         await fh.close();
+        // Delete the file
         await unlink(join(this.path.folder, name));
+        // Update the diskio file
+        await this.stabilize(this.RESERVED_SIZE);
     }
 }
