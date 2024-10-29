@@ -7,7 +7,7 @@ export class DiskIOFileWritable extends Writable {
     private index = 0;
     public ready;
 
-    constructor(diskio: IDiskIO, name: string) {
+    constructor(diskio: IDiskIO, name: string[]) {
         super();
         this.diskioFile = new DiskIOFile(diskio, name);
         this.ready = this.diskioFile.ready;

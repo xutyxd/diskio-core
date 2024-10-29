@@ -6,5 +6,5 @@ export interface IDiskIO {
     read: (fh: FileHandle, start: number, end: number) => Promise<Buffer>;
     write: (fh: FileHandle, data: Buffer, position: number) => Promise<void>;
 
-    delete: (fh: FileHandle, name: string) => Promise<void>;
+    delete: (fh: FileHandle, name: string[]) => Promise<void>;
 }

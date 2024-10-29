@@ -5,17 +5,19 @@ import { IDiskIO } from "../interfaces/diskio.interface";
 
 export class DiskIOFile {
     private fh!: FileHandle;
+    private Name: string[];
 
     public ready: Promise<void>;
 
-    constructor(private diskio: IDiskIO, private name: string) {
-        this.name = name;
-        const path = join(diskio.folder, name);
+    constructor(private diskio: IDiskIO, name: string[]) {
+        this.Name = name;
+        const path = join(diskio.folder, ...name);
         const flag = this.flag(path);
 
         this.ready = new Promise(async (resolve) => {
             // Get file descriptor for read/write
             this.fh = await open(path, flag);
+
             resolve();
         });
     }
@@ -25,11 +27,15 @@ export class DiskIOFile {
         
         try {
             accessSync(path, constants.F_OK);
-        } catch {
+        } catch(e) {
             flag = 'w+';
         }
 
         return flag;
+    }
+
+    public get name() {
+        return this.Name.join('/').replace(this.diskio.folder, '');
     }
 
     public read(start: number, end: number) {
@@ -41,7 +47,7 @@ export class DiskIOFile {
     }
 
     public delete() {
-        return this.diskio.delete(this.fh, this.name);
+        return this.diskio.delete(this.fh, this.Name);
     }
 
     public close() {
