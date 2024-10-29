@@ -12,16 +12,16 @@
 </h1>
 
 <p align="left">
-    <img src="https://img.shields.io/npm/dw/diskio"/>
-    <img alt="NPM Unpacked Size" src="https://img.shields.io/npm/unpacked-size/diskio">
-    <img alt="npm bundle size" src="https://img.shields.io/bundlephobia/min/diskio">
-    <img alt="NPM Version" src="https://img.shields.io/npm/v/diskio">
+    <img src="https://img.shields.io/npm/dw/disk-io"/>
+    <img alt="NPM Unpacked Size" src="https://img.shields.io/npm/unpacked-size/disk-io">
+    <img alt="npm bundle size" src="https://img.shields.io/bundlephobia/min/disk-io">
+    <img alt="NPM Version" src="https://img.shields.io/npm/v/disk-io">
 </p>
 
 ## 📥 Installation
 
 ```bash
-npm install diskio
+npm install disk-io
 ```
 
 ## 📚 Use case

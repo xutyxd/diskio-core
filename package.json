@@ -1,5 +1,5 @@
 {
-  "name": "diskio",
+  "name": "disk-io",
   "version": "1.0.0",
   "description": "A disk I/O management utility to reserve, allocate, and optimize disk space usage, trying to ensure efficient file handling. Seamlessly locks disk space in advance, freeing and reallocating it for future I/O operations with optimal pagination for maximum performance.",
   "type": "module",
