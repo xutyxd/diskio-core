@@ -39,7 +39,12 @@
     "SSD",
     "pagination",
     "storage",
-    "npm-package"
+    "npm-package",
+    "diskio",
+    "disk-io",
+    "fs",
+    "file-system",
+    "io"
   ],
   "author": "XutyXD",
   "license": "ISC",
