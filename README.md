@@ -44,7 +44,7 @@ The `DiskIO` class is a utility that allows you to reserve, allocate, and optimi
 The `DiskIO` class is used to create an instance of the `DiskIO` class. It requires two parameters: the path to the directory where the DiskIO will be created and the amount of bytes to reserve for the DiskIO.
 
 ```typescript
-import { DiskIO } from 'diskio';
+import { DiskIO } from 'diskio-core';
 
 const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
 // Need to wait for the DiskIO to be ready
