@@ -136,6 +136,20 @@ describe('DiskIO class', () => {
 
             await file.delete();
         });
+
+        it('should get a file that not exist previously', async () => {
+            // Get instance of the diskio
+            const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
+            // Wait to be ready
+            await diskio.ready;
+            // Get the file
+            const file = await diskio.get('test.txt');
+            
+            expect(file).toBeInstanceOf(DiskIOFile);
+            expect(file.name).toContain('test.txt');
+
+            await file.delete();
+        });
     });
 
     describe('DiskIO write', () => {
@@ -163,6 +177,24 @@ describe('DiskIO class', () => {
             const file = await diskio.create('test.txt');
             await file.write(buffer, 0);
 
+            const read = await diskio.read(file['fh'], 0, buffer.length);
+
+            expect(read).toBeInstanceOf(Buffer);
+            expect(read.toString()).toBe(buffer.toString());
+
+            await file.delete();
+        });
+
+        it('should write a file that not exist previously', async () => {
+            const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
+            await diskio.ready;
+            const buffer = Buffer.from('Hello world!');
+
+            // Get the file
+            const file = await diskio.get('test.txt');
+            // Write the file
+            await file.write(buffer, 0);
+            // Read the file
             const read = await diskio.read(file['fh'], 0, buffer.length);
 
             expect(read).toBeInstanceOf(Buffer);
