@@ -18,17 +18,17 @@
     <img alt="NPM Version" src="https://img.shields.io/npm/v/diskio">
 </p>
 
-## Installation
+## 📥 Installation
 
 ```bash
 npm install diskio
 ```
 
-## Use cases
+## 📚 Use case
 
 The `DiskIO` class is a utility that allows you to reserve, allocate, and optimize disk space usage, trying to ensure efficient file handling. It is designed to be used in a Node.js environment.
 
-## Features
+## 📋 Features
 
 - Reserve disk space for a specific amount of bytes.
 - Allocate disk space for a specific amount of bytes.
@@ -36,7 +36,7 @@ The `DiskIO` class is a utility that allows you to reserve, allocate, and optimi
 - Create, read, and delete files.
 - Get information about the disk and DiskIO usage.
 
-## Usage
+## 📖 Usage
 
 
 ### DiskIO
