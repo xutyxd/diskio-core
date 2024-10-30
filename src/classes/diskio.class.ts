@@ -148,6 +148,11 @@ export class DiskIO implements IDiskIO {
         await mkdir(path, { recursive: true });
         // Create file path
         const filePath = join(path, name);
+        // Check if file exists
+        if (await exists(filePath)) {
+            // Recall trying to get a new path without the file
+            return this.create(name);
+        }
         // Create the file
         await writeFile(filePath, Buffer.alloc(0));
         // Update the diskio file (folder metadata have size)

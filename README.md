@@ -52,20 +52,6 @@ await diskio.ready;
 
 ```
 
-### DiskIO.create
-
-The `create` method is used to create a new file in the DiskIO. It requires one parameter: the name of the file to be created.
-
-**NOTE**: It will use and UUID to create a folder system to improve performance. Save name to rerieve it later.
-
-```typescript
-const file = await diskio.create('test.txt');
-
-console.log(file.name); // 7cb79b23/b098/4c56/917c/005abaf72fd5/test.txt
-
-await file.close();
-```
-
 ### DiskIO.information
 
 The `information` property is used to get information about the DiskIO and the DiskIO usage. It has two methods: `disk` and `diskio`.
@@ -118,6 +104,20 @@ console.log(information);
     capacity: '100%'
 }
 */
+```
+
+### DiskIO.create
+
+The `create` method is used to create a new file in the DiskIO. It requires one parameter: the name of the file to be created.
+
+**NOTE**: It will use and UUID to create a folder system to improve performance. Save name to rerieve it later.
+
+```typescript
+const file = await diskio.create('test.txt');
+
+console.log(file.name); // 7cb79b23/b098/4c56/917c/005abaf72fd5/test.txt
+
+await file.close();
 ```
 
 ### DiskIO.get
