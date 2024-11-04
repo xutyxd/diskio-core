@@ -1,5 +1,5 @@
-import child_process from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import child_process, { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { FileHandle, mkdir, readdir, rmdir, stat, truncate, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -65,8 +65,23 @@ export class DiskIO implements IDiskIO {
 
             return size;
         },
+        diskioSync: () => {
+            const status = statSync(this.path.diskio);
+            // Get diskio file size
+            const { size } = status;
+
+            return size;
+        },
         folder: async () => {
             const { stdout } = await exec(`du -sb ${this.path.folder}`);
+            const cleaned = stdout.split('\t');
+            const [ size ] = cleaned;
+
+            return Number(size);
+        },
+        folderSync: () => {
+            const buffer = execSync(`du -sb ${this.path.folder}`);
+            const stdout = buffer.toString();
             const cleaned = stdout.split('\t');
             const [ size ] = cleaned;
 
@@ -120,6 +135,20 @@ export class DiskIO implements IDiskIO {
         await truncate(this.path.diskio, difference);
     }
 
+    private stabilizeSync(expected: number) {
+        const diskioExists = existsSync(this.path.diskio);
+        // Check if diskio file exists
+        if (!diskioExists) {
+            // Create diskio file
+            writeFileSync(this.path.diskio, Buffer.alloc(0));
+        }
+        const diskio = this.size.diskioSync();
+        const folder = this.size.folderSync();
+        const difference = expected - folder + diskio;
+        // Truncate the difference
+        truncateSync(this.path.diskio, difference);
+    }
+
     private async allocate(size: number) {
         const diskio = await this.size.diskio();
         // Check if the size is less than the available size
@@ -161,6 +190,36 @@ export class DiskIO implements IDiskIO {
         return this.get(filePath.replace(this.path.folder, ''));
     }
 
+    public createSync(name: string): DiskIOFile {
+         // Check if the name is a valid string
+         if (typeof name !== 'string') {
+            throw new Error('The name is not a string');
+        }
+        // Check if the name is empty
+        if (name.length === 0) {
+            throw new Error('The name is empty');
+        }
+        // Get a random UUID
+        const uuid = crypto.randomUUID();
+        // Create path for the file
+        const path = join(this.path.folder, ...uuid.split('-'));
+        // Folders required to create the file
+        mkdirSync(path, { recursive: true });
+        // Create file path
+        const filePath = join(path, name);
+        // Check if file exists
+        if (existsSync(filePath)) {
+            // Recall trying to get a new path without the file
+            return this.createSync(name);
+        }
+        // Create the file
+        writeFileSync(filePath, Buffer.alloc(0));
+        // Update the diskio file (folder metadata have size)
+        this.stabilizeSync(this.RESERVED_SIZE);
+        // Return the file
+        return this.getSync(filePath.replace(this.path.folder, ''));
+    }
+
     public async get(name: string): Promise<DiskIOFile> {
         // Clean the name
         const cleaned = name.split('/').filter(Boolean);
@@ -174,6 +233,21 @@ export class DiskIO implements IDiskIO {
         const diskioFile = new DiskIOFile(this, cleaned);
         // Wait for the file to be ready
         await diskioFile.ready;
+        // Return the file
+        return diskioFile;
+    }
+
+    public getSync(name: string): DiskIOFile {
+        // Clean the name
+        const cleaned = name.split('/').filter(Boolean);
+        // Get the path
+        const path = join(this.path.folder, ...cleaned);
+        // Check that name is not diskio file
+        if (path === this.path.diskio) {
+            throw new Error('The name is diskio storage file');
+        }
+        // Get an instance of the file
+        const diskioFile = new DiskIOFile(this, cleaned);
         // Return the file
         return diskioFile;
     }
