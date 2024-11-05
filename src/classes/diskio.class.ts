@@ -253,24 +253,30 @@ export class DiskIO implements IDiskIO {
     }
 
     public async read(fh: FileHandle, start: number, end: number): Promise<Buffer> {
-        // Get difference between the expected size and the available size
-        const difference = end - start;
         // Get file size
         const { size } = await fh.stat();
+        // Get real end position
+        const realEnd = end > size ? size : end;
+        // Get difference between the expected size and the available size
+        const difference = realEnd - start;
+        // Get many bytes to read
+        const length = difference > 0 ? difference : 0;
         // Create a buffer to read
-        const buffer = Buffer.alloc(end - start);
+        const buffer = Buffer.alloc(length);
         // Calculate how many reads are needed
-        let reads = Math.ceil(difference / this.optimal);
+        let reads = Math.ceil(length / this.optimal);
         // Set index to 0
         let index = 0;
         // Iterate over the blobs
         while (index < reads) {
-            // Calculate the buffer start position
-            const bufferStart = start + index * this.optimal;
+            // Calculate offset to read
+            const offset = index * this.optimal;
+            // Calculate remaining bytes to read
+            const remaining = size - offset;
             // Calculate how many bytes to read
-            const bytesToRead = bufferStart + this.optimal > size ? size - bufferStart : this.optimal;
+            const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read the buffer
-            await fh.read(buffer, bufferStart, bytesToRead, bufferStart);
+            await fh.read(buffer, offset, toRead, start);
             // Increment the index
             index++;
         }
@@ -287,13 +293,14 @@ export class DiskIO implements IDiskIO {
         let index = 0;
         // Iterate over the blobs
         while (index < writes) {
-            // Calculate the buffer start position
-            const bufferStart = position + index * this.optimal;
+            // Calculate offset to write
+            const offset = index * this.optimal;
+            // Calculate remaining bytes to write
+            const remaining = data.length - offset;
             // Calculate how many bytes to write
-            // const bytesToWrite = bufferStart + this.optimal > size ? size - bufferStart : this.optimal;
-            const bytesToWrite = this.optimal > data.length - bufferStart ? data.length - bufferStart : this.optimal;
+            const toWrite = this.optimal > remaining ? remaining : this.optimal;
             // Write the buffer
-            await fh.write(data, bufferStart, bytesToWrite, bufferStart);
+            await fh.write(data, offset, toWrite, position + offset);
             // Increment the index
             index++;
         }

@@ -98,12 +98,11 @@ describe('DiskIO class', () => {
             await diskio.ready;
 
             const file = await diskio.create('test.txt');
-
-            expect(file).toBeInstanceOf(DiskIOFile);
-            console.log('File name: ', file.name);
-            expect(file.name).toContain('test.txt');
-
+            // Remove the file
             await file.delete();
+            
+            expect(file).toBeInstanceOf(DiskIOFile);
+            expect(file.name).toContain('test.txt');
         });
     });
 
@@ -178,11 +177,29 @@ describe('DiskIO class', () => {
             await file.write(buffer, 0);
 
             const read = await diskio.read(file['fh'], 0, buffer.length);
+            // Remove the file
+            await file.delete();
+            
+            expect(read).toBeInstanceOf(Buffer);
+            expect(read.toString()).toBe(buffer.toString());
+        });
+
+        it('should write a file with a buffer bigger than 65536 bytes', async () => {            
+            const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
+            await diskio.ready;
+            const buffer = Buffer.from(new Array(65537).fill('A').join(''));
+
+            // Get the file
+            const file = await diskio.get('test.txt');
+            // Write the file
+            await file.write(buffer, 0);
+            // Read the file
+            const read = await diskio.read(file['fh'], 0, buffer.length);
+            // Remove the file
+            await file.delete();
 
             expect(read).toBeInstanceOf(Buffer);
             expect(read.toString()).toBe(buffer.toString());
-
-            await file.delete();
         });
 
         it('should write a file that not exist previously', async () => {
@@ -196,11 +213,11 @@ describe('DiskIO class', () => {
             await file.write(buffer, 0);
             // Read the file
             const read = await diskio.read(file['fh'], 0, buffer.length);
+            // Remove the file
+            await file.delete();
 
             expect(read).toBeInstanceOf(Buffer);
             expect(read.toString()).toBe(buffer.toString());
-
-            await file.delete();
         });
     });
 });
