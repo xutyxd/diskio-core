@@ -7,7 +7,7 @@ export class DiskIOFile {
     private fh!: FileHandle;
     private Name: string[];
 
-    public ready: Promise<void>;
+    public ready: Promise<DiskIOFile>;
 
     constructor(private diskio: IDiskIO, name: string[]) {
         this.Name = name;
@@ -18,7 +18,7 @@ export class DiskIOFile {
             // Get file descriptor for read/write
             this.fh = await open(path, flag);
 
-            resolve();
+            resolve(this);
         });
     }
 

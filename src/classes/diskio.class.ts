@@ -19,7 +19,7 @@ export class DiskIO implements IDiskIO {
         return this.path.folder;
     }
 
-    public ready: Promise<void>;
+    public ready: Promise<DiskIO>;
 
     constructor(path: string, size: number) {
         // Check if the path exists
@@ -49,7 +49,7 @@ export class DiskIO implements IDiskIO {
         this.ready = new Promise(async (resolve) => {
             await this.stabilize(size);
             this.optimal = await this.size.block();
-            resolve();
+            resolve(this);
         });
     }
 
@@ -267,6 +267,8 @@ export class DiskIO implements IDiskIO {
         let reads = Math.ceil(length / this.optimal);
         // Set index to 0
         let index = 0;
+        // Create a promise array
+        const promises = [];
         // Iterate over the blobs
         while (index < reads) {
             // Calculate offset to read
@@ -276,10 +278,12 @@ export class DiskIO implements IDiskIO {
             // Calculate how many bytes to read
             const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read the buffer
-            await fh.read(buffer, offset, toRead, start);
+            promises.push(fh.read(buffer, offset, toRead, start));
             // Increment the index
             index++;
         }
+
+        await Promise.all(promises);
 
         return buffer;
     }
@@ -291,6 +295,8 @@ export class DiskIO implements IDiskIO {
         let writes = Math.ceil(data.length / this.optimal);
         // Set index to 0
         let index = 0;
+        // Create a promise array
+        const promises = [];
         // Iterate over the blobs
         while (index < writes) {
             // Calculate offset to write
@@ -300,10 +306,12 @@ export class DiskIO implements IDiskIO {
             // Calculate how many bytes to write
             const toWrite = this.optimal > remaining ? remaining : this.optimal;
             // Write the buffer
-            await fh.write(data, offset, toWrite, position + offset);
+            promises.push(fh.write(data, offset, toWrite, position + offset));
             // Increment the index
             index++;
         }
+
+        await Promise.all(promises);
     }
 
     public async delete(fh: FileHandle, name: string[]) {
