@@ -112,6 +112,7 @@ The `create` method is used to create a new file in the DiskIO. It requires one 
 
 **NOTE**: It will use and UUID to create a folder system to improve performance. Save name to rerieve it later.
 
+**NOTE**: It's have a sync version -> `createSync`.
 ```typescript
 const file = await diskio.create('test.txt');
 
@@ -122,10 +123,15 @@ await file.close();
 
 ### DiskIO.get
 
-The `get` method is used to get a file from the DiskIO. It requires one parameter: the name of the file to be retrieved.
+The `get` method is used to get a file from the DiskIO.
 
-**NOTE**: Is not required that the file exists in the DiskIO.
+It requires one parameter: the name of the file to be retrieved.
 
+Optionally, you can set the second parameter to `true` to check if the file exists. If file does not exist, it will throw an error.
+
+**NOTE**: Is not required that the file exists in the DiskIO if you set the second parameter to `false`.
+
+**NOTE**: It's have a sync version -> `getSync`.
 ```typescript
 const file = await diskio.get('test.txt');
 
@@ -136,6 +142,7 @@ await file.close();
 
 The `read` method is used to read a file from the DiskIO. It requires three parameters: the file handle, the starting position, and the number of bytes to read.
 
+**NOTE**: It's have a sync version -> `readSync`.
 ```typescript
 const file = await diskio.get('test.txt');
 // Using diskio
@@ -152,6 +159,7 @@ await file.close();
 
 The `write` method is used to write a file to the DiskIO. It requires three parameters: the file handle, the data to be written, and the starting position.
 
+**NOTE**: It's have a sync version -> `writeSync`.
 ```typescript
 const file = await diskio.get('test.txt');
 

@@ -231,7 +231,7 @@ export class DiskIO implements IDiskIO {
         return this.getSync(filePath.replace(this.path.folder, ''));
     }
 
-    public async get(name: string): Promise<DiskIOFile> {
+    public async get(name: string, check = false): Promise<DiskIOFile> {
         // Clean the name
         const cleaned = name.split('/').filter(Boolean);
         // Get the path
@@ -239,6 +239,14 @@ export class DiskIO implements IDiskIO {
         // Check that name is not diskio file
         if (path === this.path.diskio) {
             throw new Error('The name is diskio storage file');
+        }
+        // If need to check if file exists
+        if (check) {
+            // Check if file exists
+            const result = await exists(name);
+            if (!result) {
+                throw new Error('The file does not exist');
+            }
         }
         // Get an instance of the file
         const diskioFile = new DiskIOFile(this, cleaned);
@@ -248,7 +256,7 @@ export class DiskIO implements IDiskIO {
         return diskioFile;
     }
 
-    public getSync(name: string): DiskIOFile {
+    public getSync(name: string, check = false): DiskIOFile {
         // Clean the name
         const cleaned = name.split('/').filter(Boolean);
         // Get the path
@@ -256,6 +264,14 @@ export class DiskIO implements IDiskIO {
         // Check that name is not diskio file
         if (path === this.path.diskio) {
             throw new Error('The name is diskio storage file');
+        }
+        // If need to check if file exists
+        if (check) {
+            // Check if file exists
+            const result = existsSync(name);
+            if (!result) {
+                throw new Error('The file does not exist');
+            }
         }
         // Get an instance of the file
         const diskioFile = new DiskIOFile(this, cleaned);
