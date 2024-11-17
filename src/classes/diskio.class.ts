@@ -243,7 +243,7 @@ export class DiskIO implements IDiskIO {
         // If need to check if file exists
         if (check) {
             // Check if file exists
-            const result = await exists(name);
+            const result = await exists(path);
             if (!result) {
                 throw new Error('The file does not exist');
             }
@@ -268,7 +268,7 @@ export class DiskIO implements IDiskIO {
         // If need to check if file exists
         if (check) {
             // Check if file exists
-            const result = existsSync(name);
+            const result = existsSync(path);
             if (!result) {
                 throw new Error('The file does not exist');
             }
