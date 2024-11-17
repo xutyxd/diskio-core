@@ -1,5 +1,5 @@
 import child_process, { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, statSync, truncateSync, writeFileSync } from 'node:fs';
+import { existsSync, fstatSync, mkdirSync, readSync, statSync, truncateSync, writeFileSync, writeSync } from 'node:fs';
 import { FileHandle, mkdir, readdir, rmdir, stat, truncate, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -160,6 +160,17 @@ export class DiskIO implements IDiskIO {
         await truncate(this.path.diskio, diskio - size);
     }
 
+    private allocateSync(size: number) {
+        const diskio = this.size.diskioSync();
+        // Check if the size is less than the available size
+        if (size > diskio) {
+            throw new Error('The size is greater than the available size');
+        }
+
+        // Truncate the difference
+        truncateSync(this.path.diskio, diskio - size);
+    }
+
     public async create(name: string): Promise<DiskIOFile> {
         // Check if the name is a valid string
         if (typeof name !== 'string') {
@@ -288,6 +299,42 @@ export class DiskIO implements IDiskIO {
         return buffer;
     }
 
+    public readSync(fh: FileHandle, start: number, end: number): Buffer {
+        // Get descriptor
+        const descriptor = fh.fd;
+        // Get file stats
+        const stats = fstatSync(descriptor); 
+        // Get diskio file size
+        const { size } = stats;
+        // Get real end position
+        const realEnd = end > size ? size : end;
+        // Get difference between the expected size and the available size
+        const difference = realEnd - start;
+        // Get many bytes to read
+        const length = difference > 0 ? difference : 0;
+        // Create a buffer to read
+        const buffer = Buffer.alloc(length);
+        // Calculate how many reads are needed
+        let reads = Math.ceil(length / this.optimal);
+        // Set index to 0
+        let index = 0;
+        // Iterate over the blobs
+        while (index < reads) {
+            // Calculate offset to read
+            const offset = index * this.optimal;
+            // Calculate remaining bytes to read
+            const remaining = size - offset;
+            // Calculate how many bytes to read
+            const toRead = this.optimal > remaining ? remaining : this.optimal;
+            // Read from the file
+            readSync(descriptor, buffer, offset, toRead, start);
+            // Increment the index
+            index++;
+        }
+
+        return buffer;
+    }
+
     public async write(fh: FileHandle, data: Buffer, position: number) {
         // First, allocate the space
         await this.allocate(data.length);
@@ -312,6 +359,28 @@ export class DiskIO implements IDiskIO {
         }
 
         await Promise.all(promises);
+    }
+
+    public writeSync(fh: FileHandle, data: Buffer, position: number) {
+        // First, allocate the space
+        this.allocateSync(data.length);
+        // Calculate how many writes are needed
+        let writes = Math.ceil(data.length / this.optimal);
+        // Set index to 0
+        let index = 0;
+        // Iterate over the blobs
+        while (index < writes) {
+            // Calculate offset to write
+            const offset = index * this.optimal;
+            // Calculate remaining bytes to write
+            const remaining = data.length - offset;
+            // Calculate how many bytes to write
+            const toWrite = this.optimal > remaining ? remaining : this.optimal;
+            // Write the buffer
+            writeSync(fh.fd, data, offset, toWrite, position + offset);
+            // Increment the index
+            index++;
+        }
     }
 
     public async delete(fh: FileHandle, name: string[]) {

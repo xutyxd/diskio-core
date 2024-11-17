@@ -42,8 +42,16 @@ export class DiskIOFile {
         return this.diskio.read(this.fh, start, end);
     }
 
+    public readSync(start: number, end: number) {
+        return this.diskio.readSync(this.fh, start, end);
+    }
+
     public write(data: Buffer, position: number) {
         return this.diskio.write(this.fh, data, position);
+    }
+
+    public writeSync(data: Buffer, position: number) {
+        return this.diskio.writeSync(this.fh, data, position);
     }
 
     public delete() {

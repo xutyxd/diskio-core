@@ -7,14 +7,15 @@ export class DiskIOFileWritable extends Writable {
     private index = 0;
     public ready;
 
-    constructor(diskio: IDiskIO, name: string[]) {
+    constructor(diskio: IDiskIO, name: string[], from = 0) {
         super();
         this.diskioFile = new DiskIOFile(diskio, name);
         this.ready = this.diskioFile.ready;
+        this.index = from;
     }
 
     public _write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
-        this.diskioFile.write(chunk, this.index);
+        this.diskioFile.writeSync(chunk, this.index);
         this.index += chunk.length;
         callback();
     }
