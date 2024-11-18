@@ -18,7 +18,7 @@ export class DiskIOFileReadable extends Readable {
     public _read(size: number) {
         const buffer = this.diskioFile.readSync(this.index, this.index += size);
         this.push(buffer);
-        if (buffer.length === 0 || buffer.length < size) {
+        if (buffer.length === 0) {
             this.push(null);
             return;
         }
