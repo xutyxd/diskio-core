@@ -54,7 +54,8 @@ export class DiskIOFile {
         return this.diskio.writeSync(this.fh, data, position);
     }
 
-    public delete() {
+    public async delete() {
+        await this.ready;
         return this.diskio.delete(this.fh, this.Name);
     }
 

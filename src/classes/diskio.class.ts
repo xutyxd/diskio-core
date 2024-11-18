@@ -301,7 +301,7 @@ export class DiskIO implements IDiskIO {
             // Calculate offset to read
             const offset = index * this.optimal;
             // Calculate remaining bytes to read
-            const remaining = size - offset;
+            const remaining = length - offset;
             // Calculate how many bytes to read
             const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read the buffer
@@ -339,7 +339,7 @@ export class DiskIO implements IDiskIO {
             // Calculate offset to read
             const offset = index * this.optimal;
             // Calculate remaining bytes to read
-            const remaining = size - offset;
+            const remaining = length - offset;
             // Calculate how many bytes to read
             const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read from the file
