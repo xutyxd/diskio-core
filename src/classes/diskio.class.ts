@@ -299,13 +299,13 @@ export class DiskIO implements IDiskIO {
         // Iterate over the blobs
         while (index < reads) {
             // Calculate offset to read
-            const offset = (index * this.optimal) + start;
+            const offset = index * this.optimal;
             // Calculate remaining bytes to read
             const remaining = length - offset;
             // Calculate how many bytes to read
             const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read the buffer
-            promises.push(fh.read(buffer, offset, toRead, offset));
+            promises.push(fh.read(buffer, offset, toRead, start + offset));
             // Increment the index
             index++;
         }
@@ -337,13 +337,13 @@ export class DiskIO implements IDiskIO {
         // Iterate over the blobs
         while (index < reads) {
             // Calculate offset to read
-            const offset = (index * this.optimal) + start;
+            const offset = index * this.optimal;
             // Calculate remaining bytes to read
             const remaining = length - offset;
             // Calculate how many bytes to read
             const toRead = this.optimal > remaining ? remaining : this.optimal;
             // Read from the file
-            readSync(descriptor, buffer, offset, toRead, offset);
+            readSync(descriptor, buffer, offset, toRead, start + offset);
             // Increment the index
             index++;
         }
