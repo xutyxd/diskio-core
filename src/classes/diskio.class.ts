@@ -14,6 +14,7 @@ export class DiskIO implements IDiskIO {
     private RESERVED_SIZE;
     private path: { folder: string, diskio: string };
     private optimal = 4096;
+    private depth;
 
     public get folder() {
         return this.path.folder;
@@ -21,7 +22,7 @@ export class DiskIO implements IDiskIO {
 
     public ready: Promise<DiskIO>;
 
-    constructor(path: string, size: number) {
+    constructor(path: string, size: number, depth: 1 | 2 | 3 | 4 | 5 = 2) {
         // Check if the path exists
         if (!existsSync(path)) {
             throw new Error('The path does not exist');
@@ -45,6 +46,8 @@ export class DiskIO implements IDiskIO {
             folder: join(path),
             diskio: `${join(path)}/${this.RESERVED_FILE}`
         };
+        // Set depth for the folder
+        this.depth = depth;
         // Stabilize the diskio space
         this.ready = new Promise(async (resolve) => {
             await this.stabilize(size);
@@ -183,7 +186,7 @@ export class DiskIO implements IDiskIO {
         // Get a random UUID
         const uuid = crypto.randomUUID();
         // Create path for the file
-        const path = join(this.path.folder, ...uuid.split('-'));
+        const path = join(this.path.folder, ...uuid.split('-').filter((e, index) => index < this.depth));
         // Folders required to create the file
         await mkdir(path, { recursive: true });
         // Create file path
@@ -213,7 +216,7 @@ export class DiskIO implements IDiskIO {
         // Get a random UUID
         const uuid = crypto.randomUUID();
         // Create path for the file
-        const path = join(this.path.folder, ...uuid.split('-'));
+        const path = join(this.path.folder, ...uuid.split('-').filter((e, index) => index < this.depth));
         // Folders required to create the file
         mkdirSync(path, { recursive: true });
         // Create file path
