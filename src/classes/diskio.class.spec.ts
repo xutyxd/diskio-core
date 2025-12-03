@@ -1,5 +1,5 @@
 
-import { rm, unlink } from 'fs/promises';
+import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { DiskIOFile } from './diskio-file.class';
 import { DiskIO } from './diskio.class';

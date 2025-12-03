@@ -5,7 +5,8 @@ import { IDiskIO } from "../interfaces/diskio.interface";
 
 export class DiskIOFile {
     private fh!: FileHandle;
-    private Name: string[];
+    private Name: string[] // [ '4ffe02e5', 'e92c', 'file.data' ];
+    private Stat?: Awaited<ReturnType<FileHandle['stat']>>;
 
     public ready: Promise<DiskIOFile>;
 
@@ -36,6 +37,17 @@ export class DiskIOFile {
 
     public get name() {
         return this.Name.join('/').replace(this.diskio.folder, '');
+    }
+
+    public async stat() {
+        await this.ready;
+        let stat = this.Stat;
+
+        if (!stat) {
+            stat = this.Stat = await this.fh.stat();
+        }
+
+        return stat;
     }
 
     public read(start: number, end: number) {
