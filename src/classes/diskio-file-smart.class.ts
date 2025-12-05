@@ -2,7 +2,7 @@ import Rabin, { create } from 'rabin-wasm';
 
 import { blake3 } from "hash-wasm";
 
-import { compress } from '@mongodb-js/zstd'
+import { compress, decompress } from '@mongodb-js/zstd'
 
 import { IDiskIOFileManifest } from "../interfaces/diskio-file-manifest.interface";
 import { IDiskIO } from "../interfaces/diskio.interface";
@@ -10,6 +10,8 @@ import { DiskIOFile } from "./diskio-file.class";
 import { IChunkManifest } from '../interfaces/chunk-manifest.interface';
 
 export class DiskioFileSmart {
+    private manifest: IDiskIOFileManifest;
+
     private fhs: Map<string, DiskIOFile> = new Map();
     private Rabin?: Rabin;
     private tail?: Buffer;
@@ -17,6 +19,8 @@ export class DiskioFileSmart {
     public ready: Promise<DiskioFileSmart>;
 
     constructor(private diskio: IDiskIO, manifest: IDiskIOFileManifest) {
+        // Create a copy of the manifest
+        this.manifest = structuredClone(manifest);
         this.ready = new Promise(async (resolve) => {
             // Await for the diskio to be ready
             await this.diskio.ready;
@@ -71,6 +75,53 @@ export class DiskioFileSmart {
 
     }
 
+    public async read(start: number, end: number): Promise<Buffer> {
+        // Define buffer
+        const buffer = Buffer.allocUnsafe(end - start);
+        // Iterate over the chunks to create a map with instructions
+        const instructions = this.manifest.chunks.map((chunk, index, original) => {
+            // Get moved bytes
+            const moved = original.slice(0, index).reduce((bytes, { original }) => bytes + original, 0);
+            // Check start
+            const before = start > moved;
+            // Check end
+            const after = end < moved;
+            // Check if is not range
+            if (before || after) {
+                // Skip this chunk
+                return;
+            }
+            // Determine from where to start reading
+            const from = Math.max(start - moved, 0);
+            // Determine from where to end reading
+            const to = Math.min(chunk.original, end - moved);
+            // Return the instruction
+            return { chunk, from, to };
+            // Clear empty instructions
+        }).filter((instruction): instruction is Exclude<typeof instruction, undefined> => Boolean(instruction));
+        // Iterate over the instructions
+        const promises = instructions.map(async ({ chunk, from, to }, index, original) => {
+            // Calculate probably wrote bytes
+            const wrote = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (from - to), 0);
+            // Get the file
+            const fh = this.fhs.get(chunk.hash);
+            // Check file handle exists
+            if (!fh) {
+                throw new Error('File corrupted!');
+            }
+            // Read the whole chunk to decompress it
+            const readed = await fh.read(0, chunk.original);
+            // Decompress the chunk
+            const decompressed = await decompress(readed);
+            // Read the part of the chunk
+            decompressed.copy(buffer, wrote, from, to);
+        });
+        // Wait for all the instructions to be executed
+        await Promise.all(promises);
+        // Return the buffer
+        return buffer;
+    }
+
     public async write(data: Buffer): Promise<IDiskIOFileManifest> {
         let buffer: Buffer;
         // Check if there is a tail
@@ -103,9 +154,11 @@ export class DiskioFileSmart {
         const chunkPromises: Promise<IChunkManifest>[] = parts.map((part) => this.Write(part));
         // Await for all the hashes to be ready
         const chunks = await Promise.all(chunkPromises);
+        // Push chunks to the manifest to keep updated
+        this.manifest.chunks.push(...chunks);
         // Create a manifest
         const manifest: IDiskIOFileManifest = { chunks };
-        // Return the manifest
+        // Return the data manifest
         return manifest;
     }
 
@@ -114,7 +167,15 @@ export class DiskioFileSmart {
         // Check for the tail
         if (this.tail) {
             // Write the tail
-            chunk = await this.Write(this.tail);
+            const wrote = await this.Write(this.tail);
+            // Push the chunk to the manifest
+            this.manifest.chunks.push(wrote);
+            // Update the chunk
+            chunk = wrote;
+        }
+        // Close all file descriptors
+        for (const fh of this.fhs.values()) {
+            await fh.close();
         }
         // Return the manifest
         return chunk;
