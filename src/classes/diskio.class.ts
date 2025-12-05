@@ -49,11 +49,12 @@ export class DiskIO implements IDiskIO {
         // Set depth for the folder
         this.depth = depth;
         // Stabilize the diskio space
-        this.ready = new Promise(async (resolve) => {
+        this.ready = (async () => {
             await this.stabilize(size);
             this.optimal = await this.size.block();
-            resolve(this);
-        });
+            // Return itself
+            return this;
+        })();
     }
 
     private size = {

@@ -15,12 +15,11 @@ export class DiskIOFile {
         const path = join(diskio.folder, ...name);
         const flag = this.flag(path);
 
-        this.ready = new Promise(async (resolve) => {
+        this.ready = (async () => {
             // Get file descriptor for read/write
             this.fh = await open(path, flag);
-
-            resolve(this);
-        });
+            return this;
+        })();
     }
 
     private flag(path: string): 'r+' | 'w+' {

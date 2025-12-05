@@ -9,39 +9,42 @@ import { IDiskIO } from "../interfaces/diskio.interface";
 import { DiskIOFile } from "./diskio-file.class";
 import { IChunkManifest } from '../interfaces/chunk-manifest.interface';
 
-export class DiskioFileSmart {
+export class DiskIOFileSmart {
     private manifest: IDiskIOFileManifest;
 
     private fhs: Map<string, DiskIOFile> = new Map();
     private Rabin?: Rabin;
     private tail?: Buffer;
 
-    public ready: Promise<DiskioFileSmart>;
+    public ready: Promise<DiskIOFileSmart>;
 
-    constructor(private diskio: IDiskIO, manifest: IDiskIOFileManifest) {
+    constructor(private diskio: IDiskIO, manifest?: IDiskIOFileManifest) {
         // Create a copy of the manifest
-        this.manifest = structuredClone(manifest);
-        this.ready = new Promise(async (resolve) => {
+        this.manifest = structuredClone(manifest || { chunks: [] });
+        const self = this;
+        this.ready = (async () => {
             // Await for the diskio to be ready
             await this.diskio.ready;
             // Iterate over the chunks with a map
-            const promises = manifest.chunks.map((chunk) => {
-                // Get the file
-                const filePromise = this.diskio.get(chunk.hash);
+            const promises = self.manifest.chunks.map((chunk) => {
+                // Get the file forcing to exists
+                const filePromise = self.diskio.get(chunk.hash, true);
                 filePromise.then((file) => {
                     // Add the file to the map
-                    this.fhs.set(chunk.hash, file);
+                    self.fhs.set(chunk.hash, file);
                 });
 
                 return filePromise;
             });
-            // Wait for all the files to be ready
-            Promise.all(promises).then(() => resolve(this));
-        });
+            // Wait for all the files to be ready or reject
+            Promise.all(promises);
+            // Return itself
+            return self;
+        })();
     }
 
-    private rabin(): Rabin | Promise<Rabin> {
-        return this.Rabin || create(2 * 1024 * 1024, 4 * 1024 * 1024, 6 * 1024 * 1024);
+    private async rabin(): Promise<Rabin> {
+        return this.Rabin || (this.Rabin = await create(2 * 1024 * 1024, 4 * 1024 * 1024, 6 * 1024 * 1024));
     }
 
     private async Write(data: Buffer): Promise<IChunkManifest> {
