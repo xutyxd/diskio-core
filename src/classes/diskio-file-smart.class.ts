@@ -26,18 +26,14 @@ export class DiskIOFileSmart {
             // Await for the diskio to be ready
             await this.diskio.ready;
             // Iterate over the chunks with a map
-            const promises = self.manifest.chunks.map((chunk) => {
+            const promises = self.manifest.chunks.map(async (chunk) => {
                 // Get the file forcing to exists
-                const filePromise = self.diskio.get(chunk.hash, true);
-                filePromise.then((file) => {
-                    // Add the file to the map
-                    self.fhs.set(chunk.hash, file);
-                });
-
-                return filePromise;
+                const file = await self.diskio.get(chunk.hash, true);
+                // Add the file to the map
+                self.fhs.set(chunk.hash, file);
             });
-            // Wait for all the files to be ready or reject
-            Promise.all(promises);
+            // Wait for all the files to be ready
+            await Promise.all(promises);
             // Return itself
             return self;
         })();
