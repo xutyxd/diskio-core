@@ -56,7 +56,7 @@ describe('DiskIOFileSmart class', () => {
         });
     });
 
-    describe.skip('DiskIOFileSmart write', () => {
+    describe('DiskIOFileSmart write', () => {
         it('should write a file', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
@@ -108,15 +108,17 @@ describe('DiskIOFileSmart class', () => {
             await diskIOFileSmartBackup.ready;
             // Open the file
             const file = await open('./mocks/video-b.mp4', 'r+');
+            const fileBackup = await open('./mocks/video-b.mp4', 'r+');
             // Read the file
             const buffer = await file.readFile();
+            const bufferBackup = await fileBackup.readFile();
             // Write the file
             await diskIOFileSmart.write(buffer);
             // Close to clean resources
             await diskIOFileSmart.flush();
             await diskIOFileSmart.close();
             // Re-write the file again
-            await diskIOFileSmartBackup.write(buffer);
+            await diskIOFileSmartBackup.write(bufferBackup);
             // Close to clean resources
             await diskIOFileSmartBackup.flush();
             // Close the file

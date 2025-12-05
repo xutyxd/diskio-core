@@ -185,8 +185,7 @@ export class DiskIO implements IDiskIO {
             throw new Error('The name is empty');
         }
         // Clean the name
-        const cleaned = name.split('/').filter(Boolean).join();
-
+        const cleaned = name.split('/').filter(Boolean).join('');
         let path: string;
         // Check if the name is long enough
         if (cleaned.length >= this.depth * 2 && collision) {
@@ -213,12 +212,10 @@ export class DiskIO implements IDiskIO {
         // Create path for the file
         const path = this.createPath(name, collision);
         const relative = join(this.path.folder, path);
-        console.log('path: ', path);
         // Folders required to create the file
         await mkdir(relative, { recursive: true });
         // Create file path
         const filePath = join(relative, name);
-        console.log('filePath: ', filePath);
         // Check if file exists
         if (await exists(filePath) && !collision) {
             // Recall trying to get a new path without the file

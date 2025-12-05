@@ -49,13 +49,13 @@ export class DiskIOFileSmart {
         // Hash the part
         const hash = await blake3(data);
         // Get possible path
-        const path = this.diskio.createPath(hash);
+        const path = this.diskio.createPath(hash, true);
         // Check if path exists
         const exists = await this.diskio.exists(path);
         // Return hash
         if (exists) {
             // Get fh for it
-            const fh = await this.diskio.get(hash);
+            const fh = await this.diskio.get(join(path, hash));
             // Save the ref
             this.fhs.set(hash, fh);
             // Get the size
@@ -66,7 +66,7 @@ export class DiskIOFileSmart {
         // Compress the data
         const compressed = await compress(data, 3);
         // Create file
-        const fh = await this.diskio.create(path, true);
+        const fh = await this.diskio.create(hash, true);
         // Write the compressed data
         await fh.write(compressed, 0);
         // Save ref
@@ -171,6 +171,8 @@ export class DiskIOFileSmart {
         }
         // Write the tail
         const wrote = await this.Write(this.tail);
+        // Clean the tail
+        this.tail = undefined;
         // Push the chunk to the manifest
         this.Manifest.chunks.push(wrote);
         // Update the chunk
