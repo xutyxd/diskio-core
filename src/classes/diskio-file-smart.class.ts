@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import Rabin, { create } from 'rabin-wasm';
 
 import { blake3 } from "hash-wasm";
@@ -9,8 +10,9 @@ import { IDiskIO } from "../interfaces/diskio.interface";
 import { DiskIOFile } from "./diskio-file.class";
 import { IChunkManifest } from '../interfaces/chunk-manifest.interface';
 
+
 export class DiskIOFileSmart {
-    private manifest: IDiskIOFileManifest;
+    private Manifest: IDiskIOFileManifest;
 
     private fhs: Map<string, DiskIOFile> = new Map();
     private Rabin?: Rabin;
@@ -20,13 +22,13 @@ export class DiskIOFileSmart {
 
     constructor(private diskio: IDiskIO, manifest?: IDiskIOFileManifest) {
         // Create a copy of the manifest
-        this.manifest = structuredClone(manifest || { chunks: [] });
+        this.Manifest = structuredClone(manifest || { chunks: [] });
         const self = this;
         this.ready = (async () => {
             // Await for the diskio to be ready
             await this.diskio.ready;
             // Iterate over the chunks with a map
-            const promises = self.manifest.chunks.map(async (chunk) => {
+            const promises = self.Manifest.chunks.map(async (chunk) => {
                 // Get the file forcing to exists
                 const file = await self.diskio.get(chunk.hash, true);
                 // Add the file to the map
@@ -64,7 +66,7 @@ export class DiskIOFileSmart {
         // Compress the data
         const compressed = await compress(data, 3);
         // Create file
-        const fh = await this.diskio.create(hash);
+        const fh = await this.diskio.create(path, true);
         // Write the compressed data
         await fh.write(compressed, 0);
         // Save ref
@@ -78,7 +80,7 @@ export class DiskIOFileSmart {
         // Define buffer
         const buffer = Buffer.allocUnsafe(end - start);
         // Iterate over the chunks to create a map with instructions
-        const instructions = this.manifest.chunks.map((chunk, index, original) => {
+        const instructions = this.Manifest.chunks.map((chunk, index, original) => {
             // Get moved bytes
             const moved = original.slice(0, index).reduce((bytes, { original }) => bytes + original, 0);
             // Check start
@@ -139,11 +141,12 @@ export class DiskIOFileSmart {
         // Get cut points
         const cutPoints = rabin.fingerprint(data);
         // Create a promise array
-        const parts = cutPoints.map((point, index, self) => {
+        const parts = [...cutPoints].map((point, index, self) => {
+            const numbered = Number(point);
             // Get the previous
-            const previous = self[index - 1] ?? 0;
+            const before = self.slice(0, index).reduce((bytes, point) => bytes + Number(point), 0);
             // Get the part
-            return data.subarray(previous, point);
+            return data.subarray(before, before + numbered);
         });
         // Get last part
         const last = parts.pop();
@@ -154,29 +157,49 @@ export class DiskIOFileSmart {
         // Await for all the hashes to be ready
         const chunks = await Promise.all(chunkPromises);
         // Push chunks to the manifest to keep updated
-        this.manifest.chunks.push(...chunks);
+        this.Manifest.chunks.push(...chunks);
         // Create a manifest
         const manifest: IDiskIOFileManifest = { chunks };
         // Return the data manifest
         return manifest;
     }
 
-    public async close(): Promise<IChunkManifest | void> {
-        let chunk: IChunkManifest | undefined;
+    public async flush(): Promise<IChunkManifest | undefined> {
         // Check for the tail
-        if (this.tail) {
-            // Write the tail
-            const wrote = await this.Write(this.tail);
-            // Push the chunk to the manifest
-            this.manifest.chunks.push(wrote);
-            // Update the chunk
-            chunk = wrote;
+        if (!this.tail) {
+            return;
         }
+        // Write the tail
+        const wrote = await this.Write(this.tail);
+        // Push the chunk to the manifest
+        this.Manifest.chunks.push(wrote);
+        // Update the chunk
+        const chunk = wrote;
+        // Return the manifest
+        return chunk;
+    }
+
+    public get manifest() {
+        return structuredClone(this.Manifest);
+    }
+
+    public async delete() {
+        // Delete all the chunks
+        const deletes = this.Manifest.chunks.map(async (chunk) => {
+            const fh = this.fhs.get(chunk.hash);
+            await fh?.delete();
+        });
+        // Return all the deletes
+        return Promise.all(deletes);
+    }
+
+    public async close(): Promise<void> {
+        // Flush the tail
+        await this.flush();
         // Close all file descriptors
         for (const fh of this.fhs.values()) {
             await fh.close();
         }
-        // Return the manifest
-        return chunk;
+        
     }
 }

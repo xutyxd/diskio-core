@@ -6,10 +6,10 @@ export interface IDiskIO {
 
     ready: Promise<IDiskIO>;
 
-    createPath: (name: string) => string;
+    createPath: (name: string, collision?: boolean) => string;
 
-    create: (name: string) => Promise<DiskIOFile>;
-    createSync: (name: string) => DiskIOFile;
+    create: (name: string, collision?: boolean) => Promise<DiskIOFile>;
+    createSync: (name: string, collision?: boolean) => DiskIOFile;
 
     exists: (name: string) => Promise<boolean>;
     existsSync: (name: string) => boolean;

@@ -175,7 +175,7 @@ export class DiskIO implements IDiskIO {
         truncateSync(this.path.diskio, diskio - size);
     }
 
-    public createPath(name: string): string {
+    public createPath(name: string, collision = false): string {
         // Check if the name is a valid string
         if (typeof name !== 'string') {
             throw new Error('The name is not a string');
@@ -189,19 +189,19 @@ export class DiskIO implements IDiskIO {
 
         let path: string;
         // Check if the name is long enough
-        if (cleaned.length >= this.depth * 2) {
-            path = join(this.path.folder, ...(cleaned.match(/.{2}/g) ?? []).slice(0, this.depth));
+        if (cleaned.length >= this.depth * 2 && collision) {
+            path = (cleaned.match(/.{2}/g) ?? []).slice(0, this.depth).join('/');
         } else {
             // Get a random UUID
             const uuid = crypto.randomUUID();
             // Create path for the file
-            path = join(this.path.folder, ...uuid.split('/').filter((e, index) => index < this.depth));
+            path = uuid.split('-').filter((e, index) => index < this.depth).join('/');
         }
 
         return path;
     }
 
-    public async create(name: string): Promise<DiskIOFile> {
+    public async create(name: string, collision = false): Promise<DiskIOFile> {
         // Check if the name is a valid string
         if (typeof name !== 'string') {
             throw new Error('The name is not a string');
@@ -211,15 +211,18 @@ export class DiskIO implements IDiskIO {
             throw new Error('The name is empty');
         }
         // Create path for the file
-        const path = this.createPath(name);
+        const path = this.createPath(name, collision);
+        const relative = join(this.path.folder, path);
+        console.log('path: ', path);
         // Folders required to create the file
-        await mkdir(path, { recursive: true });
+        await mkdir(relative, { recursive: true });
         // Create file path
-        const filePath = join(path, name);
+        const filePath = join(relative, name);
+        console.log('filePath: ', filePath);
         // Check if file exists
-        if (await exists(filePath)) {
+        if (await exists(filePath) && !collision) {
             // Recall trying to get a new path without the file
-            return this.create(name);
+            return this.create(name, collision);
         }
         // Create the file
         await writeFile(filePath, Buffer.alloc(0));
@@ -229,7 +232,7 @@ export class DiskIO implements IDiskIO {
         return this.get(filePath.replace(this.path.folder, ''));
     }
 
-    public createSync(name: string): DiskIOFile {
+    public createSync(name: string, collision = false): DiskIOFile {
          // Check if the name is a valid string
          if (typeof name !== 'string') {
             throw new Error('The name is not a string');
@@ -239,15 +242,16 @@ export class DiskIO implements IDiskIO {
             throw new Error('The name is empty');
         }
         // Create path for the file
-        const path = this.createPath(name);
+        const path = this.createPath(name, collision);
+        const relative = join(this.path.folder, path);
         // Folders required to create the file
-        mkdirSync(path, { recursive: true });
+        mkdirSync(relative, { recursive: true });
         // Create file path
-        const filePath = join(path, name);
+        const filePath = join(relative, name);
         // Check if file exists
-        if (existsSync(filePath)) {
+        if (existsSync(filePath) && !collision) {
             // Recall trying to get a new path without the file
-            return this.createSync(name);
+            return this.createSync(name, collision);
         }
         // Create the file
         writeFileSync(filePath, Buffer.alloc(0));

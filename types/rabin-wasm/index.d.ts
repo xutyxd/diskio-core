@@ -8,7 +8,7 @@ declare module "rabin-wasm" {
       /**
        * Fingerprint a buffer and return chunk boundaries.
        */
-      fingerprint(data: Uint8Array): number[];
+      fingerprint(data: Uint8Array): Int32Array[];
     }
 
     export function create(avg?: number, min?: number, max?: number, windowSize?: number, polynomial?: number): Promise<Rabin>;
