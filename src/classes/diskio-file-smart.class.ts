@@ -42,7 +42,18 @@ export class DiskIOFileSmart {
     }
 
     private async rabin(): Promise<Rabin> {
-        return this.Rabin || (this.Rabin = await create(2 * 1024 * 1024, 4 * 1024 * 1024, 6 * 1024 * 1024));
+        // Min and Max are defined in BYTES
+        const MIN_SIZE = 32 * 1024;  // 32 KiB
+        const MAX_SIZE = 128 * 1024; // 128 KiB
+        
+        // Average is defined in BITS (Powers of 2)
+        // 2^16 = 65,536 bytes = 64 KiB
+        const AVG_BITS = 16; 
+
+        const WINDOW_SIZE = 64;
+        const POLYNOMIAL = 0x3DA3358B4DC173n;
+
+        return this.Rabin || (this.Rabin = await create(AVG_BITS, MIN_SIZE, MAX_SIZE, WINDOW_SIZE, POLYNOMIAL));
     }
 
     private async Write(data: Buffer): Promise<IChunkManifest> {

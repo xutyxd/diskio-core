@@ -465,12 +465,16 @@ export class DiskIO implements IDiskIO {
             const parent = join(this.path.folder, ...copy);
             // Check if folder parent is empty
             const readed = await readdir(parent);
+            // Avoid to delete if have files or folders
             if (readed.length !== 0) {
                 // If have files or folders, stop
                 break;
             }
-            // Delete the folder
-            await rmdir(parent);
+            try {
+                // Delete the folder
+                await rmdir(parent);
+                // Maybe throw an ENOENT error cause parallel execution of delete from DiskIOFileSmart
+            } catch { }
         }
         
         // Update the diskio file

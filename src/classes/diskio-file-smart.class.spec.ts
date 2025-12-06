@@ -1,6 +1,10 @@
 
 import { FileHandle, open, unlink } from 'fs/promises';
 
+// Results to compare
+import videoAResult from '../../mocks/data/video-a-chunks.data.json';
+import videoBResult from '../../mocks/data/video-b-chunks.data.json';
+
 import { DiskIOFileSmart } from './diskio-file-smart.class';
 import { DiskIO } from './diskio.class';
 
@@ -63,7 +67,7 @@ describe('DiskIOFileSmart class', () => {
             // Wait to be ready
             await diskIOFileSmart.ready;
             // Open the file
-            const file = await open('./mocks/video-b.mp4', 'r+');
+            const file = await open('./mocks/video-a.mp4', 'r+');
             // Read the file
             const buffer = await file.readFile();
             // Write the file
@@ -72,31 +76,17 @@ describe('DiskIOFileSmart class', () => {
             await file.close();
             // Flush clean resources tail
             await diskIOFileSmart.flush();
+            // Get manifest generated
             const manifest = diskIOFileSmart.manifest;
             // Expects it works
             const { chunks } = manifest;
-            const expected = [
-                {
-                    hash: '539eb15950b02344efea9285d326101c8ce11781d9f79f1eba9628fef19c9d56',
-                    original: 4194304,
-                    size: 4128787
-                },
-                {
-                    hash: '9f2dee59b37de5ca3abf31fad3f5e7237a3a970a3f81f315072c2acf6266ef0f',
-                    original: 4194304,
-                    size: 4194410
-                },
-                {
-                    hash: 'f8a73f36063c7f047eac9e7f6753ff369657ffc6ab38d0c2299dbe77d7d06858',
-                    original: 4194304,
-                    size: 4194410
-                }
-            ]
 
-            expect(chunks.length).toBe(3);
-            expect(chunks).toEqual(expected);
-            // Clean up
-            await diskIOFileSmart.delete();
+            try {
+                expect(chunks).toEqual(videoAResult);
+            } finally {
+                // Clean up
+                await diskIOFileSmart.delete();
+            }
         });
 
         it('should write a file twice', async () => {
@@ -129,29 +119,14 @@ describe('DiskIOFileSmart class', () => {
             const manifestBackup = diskIOFileSmartBackup.manifest;
             // Expects it works
             const { chunks } = manifest;
-            const expected = [
-                {
-                    hash: '539eb15950b02344efea9285d326101c8ce11781d9f79f1eba9628fef19c9d56',
-                    original: 4194304,
-                    size: 4128787
-                },
-                {
-                    hash: '9f2dee59b37de5ca3abf31fad3f5e7237a3a970a3f81f315072c2acf6266ef0f',
-                    original: 4194304,
-                    size: 4194410
-                },
-                {
-                    hash: 'f8a73f36063c7f047eac9e7f6753ff369657ffc6ab38d0c2299dbe77d7d06858',
-                    original: 4194304,
-                    size: 4194410
-                }
-            ]
 
-            expect(chunks.length).toBe(3);
-            expect(chunks).toEqual(expected);
-            expect(manifestBackup).toEqual(manifest);
-            // Clean up
-            await diskIOFileSmartBackup.delete();
+            try {
+                expect(chunks).toEqual(videoBResult);
+                expect(manifestBackup).toEqual(manifest);
+            } finally {
+                // Clean up
+                await diskIOFileSmartBackup.delete();
+            }
         });
     });
 });
