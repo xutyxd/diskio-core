@@ -22,7 +22,7 @@
     "build:mjs": "rm -fr mjs/* && tsc -p tsconfig.json && bash mjs-formatter.sh",
     "build": "npm run build:commonjs && npm run build:mjs && ./fixup.sh",
     "clean": "npm prune --production",
-    "test": "npm run build:test && jest ./test --coverage"
+    "test": "npm run build:test && jest ./test --coverage --runInBand"
   },
   "repository": {
     "type": "git",

@@ -93,7 +93,7 @@ export class DiskIOFileSmart {
         // Iterate over the chunks to create a map with instructions
         const instructions = this.Manifest.chunks.map((chunk, index, original) => {
             // Get moved bytes
-            const moved = original.slice(0, index).reduce((bytes, { original }) => bytes + original, 0);
+            const moved = original.slice(0, index).reduce((bytes, current) => bytes + current.original, 0);
             // Check start
             const before = start > moved;
             // Check end
@@ -104,9 +104,12 @@ export class DiskIOFileSmart {
                 return;
             }
             // Determine from where to start reading
-            const from = Math.max(start - moved, 0);
+            // const from = Math.max(start - moved, 0);
+            // const from = moved;
+            const from = Math.max(start, moved);
             // Determine from where to end reading
-            const to = Math.min(chunk.original, end - moved);
+            // const to = Math.min(moved + chunk.original, end - moved);
+            const to = moved + Math.min(end, chunk.original);
             // Return the instruction
             return { chunk, from, to };
             // Clear empty instructions
@@ -114,7 +117,7 @@ export class DiskIOFileSmart {
         // Iterate over the instructions
         const promises = instructions.map(async ({ chunk, from, to }, index, original) => {
             // Calculate probably wrote bytes
-            const wrote = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (from - to), 0);
+            const wrote = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (to - from), 0);
             // Get the file
             const fh = this.fhs.get(chunk.hash);
             // Check file handle exists
@@ -122,11 +125,11 @@ export class DiskIOFileSmart {
                 throw new Error('File corrupted!');
             }
             // Read the whole chunk to decompress it
-            const readed = await fh.read(0, chunk.original);
+            const readed = await fh.read(0, chunk.size);
             // Decompress the chunk
             const decompressed = await decompress(readed);
             // Read the part of the chunk
-            decompressed.copy(buffer, wrote, from, to);
+            decompressed.copy(buffer, wrote, (from - wrote), (to - wrote));
         });
         // Wait for all the instructions to be executed
         await Promise.all(promises);
@@ -152,13 +155,17 @@ export class DiskIOFileSmart {
         // Get cut points
         const cutPoints = rabin.fingerprint(data);
         // Create a promise array
-        const parts = [...cutPoints].map((point, index, self) => {
+        let parts = [...cutPoints].map((point, index, self) => {
             const numbered = Number(point);
             // Get the previous
             const before = self.slice(0, index).reduce((bytes, point) => bytes + Number(point), 0);
             // Get the part
             return data.subarray(before, before + numbered);
         });
+
+        if (!parts.length) {
+            parts = [ data ];
+        }
         // Get last part
         const last = parts.pop();
         // Update the tail

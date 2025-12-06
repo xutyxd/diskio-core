@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { exists } from '../common/fs-extends';
 import { IDiskIO } from '../interfaces/diskio.interface';
 import { DiskIOFile } from './diskio-file.class';
+import { withLock } from '../common/with-lock';
 
 const exec = promisify(child_process.exec);
 
@@ -79,7 +80,7 @@ export class DiskIO implements IDiskIO {
         folder: async () => {
             const { stdout } = await exec(`du -sb ${this.path.folder}`);
             const cleaned = stdout.split('\t');
-            const [ size ] = cleaned;
+            const [size] = cleaned;
 
             return Number(size);
         },
@@ -87,7 +88,7 @@ export class DiskIO implements IDiskIO {
             const buffer = execSync(`du -sb ${this.path.folder}`);
             const stdout = buffer.toString();
             const cleaned = stdout.split('\t');
-            const [ size ] = cleaned;
+            const [size] = cleaned;
 
             return Number(size);
         }
@@ -98,8 +99,8 @@ export class DiskIO implements IDiskIO {
             const { stdout } = await exec(`df -k ${this.path.folder}`)
             const [, information] = stdout.split('\n');
             const cleaned = information.replace(/ +/g, ' ');
-            const [ filesystem, size, used, available, capacity, mount ] = cleaned.split(' ');
-    
+            const [filesystem, size, used, available, capacity, mount] = cleaned.split(' ');
+
             return {
                 filesystem,
                 size: Number(size),
@@ -130,13 +131,18 @@ export class DiskIO implements IDiskIO {
         // Check if diskio file exists
         if (!diskioExists) {
             // Create diskio file
-            await writeFile(this.path.diskio, Buffer.alloc(0));
+            await withLock(async () => {
+                await writeFile(this.path.diskio, Buffer.alloc(0));
+            });
         }
         const diskio = await this.size.diskio();
         const folder = await this.size.folder();
         const difference = expected - folder + diskio;
-        // Truncate the difference
-        await truncate(this.path.diskio, difference);
+
+        return await withLock(async () => {
+            // Truncate the difference
+            await truncate(this.path.diskio, difference);
+        });
     }
 
     private stabilizeSync(expected: number) {
@@ -160,8 +166,10 @@ export class DiskIO implements IDiskIO {
             throw new Error('The size is greater than the available size');
         }
 
-        // Truncate the difference
-        await truncate(this.path.diskio, diskio - size);
+        return await withLock(async () => {
+            // Truncate the difference
+            await truncate(this.path.diskio, diskio - size);
+        });
     }
 
     private allocateSync(size: number) {
@@ -213,7 +221,7 @@ export class DiskIO implements IDiskIO {
         const path = this.createPath(name, collision);
         const relative = join(this.path.folder, path);
         // Folders required to create the file
-        await mkdir(relative, { recursive: true });
+        await withLock(async () => await mkdir(relative, { recursive: true }));
         // Create file path
         const filePath = join(relative, name);
         // Check if file exists
@@ -222,7 +230,7 @@ export class DiskIO implements IDiskIO {
             return this.create(name, collision);
         }
         // Create the file
-        await writeFile(filePath, Buffer.alloc(0));
+        await withLock(async () => await writeFile(filePath, Buffer.alloc(0)));
         // Update the diskio file (folder metadata have size)
         await this.stabilize(this.RESERVED_SIZE);
         // Return the file
@@ -230,8 +238,8 @@ export class DiskIO implements IDiskIO {
     }
 
     public createSync(name: string, collision = false): DiskIOFile {
-         // Check if the name is a valid string
-         if (typeof name !== 'string') {
+        // Check if the name is a valid string
+        if (typeof name !== 'string') {
             throw new Error('The name is not a string');
         }
         // Check if the name is empty
@@ -372,7 +380,7 @@ export class DiskIO implements IDiskIO {
         // Get descriptor
         const descriptor = fh.fd;
         // Get file stats
-        const stats = fstatSync(descriptor); 
+        const stats = fstatSync(descriptor);
         // Get diskio file size
         const { size } = stats;
         // Get real end position
@@ -404,15 +412,13 @@ export class DiskIO implements IDiskIO {
         return buffer;
     }
 
-    public async write(fh: FileHandle, data: Buffer, position: number) {
-        // First, allocate the space
-        await this.allocate(data.length);
+    private async Write(fh: FileHandle, data: Buffer, position: number) {
         // Calculate how many writes are needed
         let writes = Math.ceil(data.length / this.optimal);
         // Set index to 0
         let index = 0;
         // Create a promise array
-        const promises = [];
+        const promises: Promise<{ bytesWritten: number; buffer: Buffer; }>[] = [];
         // Iterate over the blobs
         while (index < writes) {
             // Calculate offset to write
@@ -422,12 +428,19 @@ export class DiskIO implements IDiskIO {
             // Calculate how many bytes to write
             const toWrite = this.optimal > remaining ? remaining : this.optimal;
             // Write the buffer
-            promises.push(fh.write(data, offset, toWrite, position + offset));
+            promises.push(/*withLock(async () => await */fh.write(data, offset, toWrite, position + offset))/*)*/;
             // Increment the index
             index++;
         }
 
         await Promise.all(promises);
+    }
+
+    public async write(fh: FileHandle, data: Buffer, position: number) {
+        // First, allocate the space
+        await this.allocate(data.length);
+        // Write it
+        return this.Write(fh, data, position);
     }
 
     public writeSync(fh: FileHandle, data: Buffer, position: number) {
@@ -456,9 +469,15 @@ export class DiskIO implements IDiskIO {
         // Close the file handle
         await fh.close();
         const path = join(this.path.folder, ...name);
+        // Check file still exists
+        const exists = await this.exists(join(...name));
+        // Already deleted
+        if (!exists) {
+            return;
+        }
         // Delete the file
-        await unlink(join(path));
-        let copy = [ ...name ];
+        await withLock(async () => await unlink(join(path)));
+        let copy = [...name];
         // Remove last element until get undefined
         while (copy.pop()) {
             // Get folder path
@@ -472,11 +491,10 @@ export class DiskIO implements IDiskIO {
             }
             try {
                 // Delete the folder
-                await rmdir(parent);
+                await withLock(async () => await rmdir(parent));
                 // Maybe throw an ENOENT error cause parallel execution of delete from DiskIOFileSmart
             } catch { }
         }
-        
         // Update the diskio file
         await this.stabilize(this.RESERVED_SIZE);
     }
