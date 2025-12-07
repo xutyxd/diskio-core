@@ -12,6 +12,9 @@
 </h1>
 
 <p align="left">
+    <a href="https://deepwiki.com/xutyxd/diskio">
+        <img alt="DeepWiki" src="https://deepwiki.com/badge.svg">
+    </a>
     <img src="https://img.shields.io/npm/dw/diskio-core"/>
     <img alt="NPM Unpacked Size" src="https://img.shields.io/npm/unpacked-size/diskio-core">
     <img alt="npm bundle size" src="https://img.shields.io/bundlephobia/min/diskio-core">
@@ -36,8 +39,77 @@ The `DiskIO` class is a utility that allows you to reserve, allocate, and optimi
 - Create, read, and delete files.
 - Get information about the disk and DiskIO usage.
 
+## DiskIO smart proccesing
+
+### 📦 Chunk-Dedupe Store – Usage Guide
+Overview
+This library combines:
+ - **Rabin fingerprinting**
+ - **Blake3 hashing**
+ - **zstd compression**
+
+With this achieva a content-addressed deduplication store for large media files. It is designed for multi-process safety out of the box
+
 ## 📖 Usage
 
+### DiskIO smart processing
+
+## Basic operation
+
+### Ingest files
+```ts
+import { DiskIOBatch } from 'diskio-core';
+
+// Instance it with path to use and a size
+const diskio = new DiskIOBatch('./diskio-smart', 500 * 1024**3); // 500 GiB
+// Wait to be ready
+await diskio.ready;
+// Start feeding it
+const buffer = Buffer.from('Hello world!');
+// Instance a smart file
+const file = new DiskIOFileSmart(diskio);
+// Write to it
+// It will generate chunks, news refs = 1, repeated refs = 2 to avoid delete
+await file.write(buffer); // It return a manifest with chunks
+// ALWAYS REMEMBER TO FLUSH IT
+await file.flush(); // It return the last chunk flushed
+// Get complete manifest
+const manifest = file.manifest; // Store in DB/whatever
+```
+
+### Read files
+```ts
+import { DiskIOBatch } from 'diskio-core';
+// Instance it with path to use and a size
+const diskio = new DiskIOBatch('./diskio-smart', 500 * 1024**3); // 500 GiB
+// Wait to be ready
+await diskio.ready;
+// Get a manifest
+const manifest = await db.get(file_ID);
+// Create a file
+const file = new DiskIOFileSmart(diskio, manifest);
+// File size
+const size = manifest.chunks.map(({ original }) => original).reduce((total, current) => total += current, 0);
+// Read it
+const readed = await file.read(0, size);
+```
+
+### Delete files
+```ts
+import { DiskIOBatch } from 'diskio-core';
+
+// Instance it with path to use and a size
+const diskio = new DiskIOBatch('./diskio-smart', 500 * 1024**3); // 500 GiB
+// Wait to be ready
+await diskio.ready;
+// Get a manifest
+const manifest = await db.get(file_ID);
+// Create a file
+const file = new DiskIOFileSmart(diskio, manifest);
+// Delete file (it only will delete chunks with refs as 1)
+const chunks = await file.delete();
+// These chunks are not deleted, update on DB/Whatever
+```
 
 ### DiskIO
 

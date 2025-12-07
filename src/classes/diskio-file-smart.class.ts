@@ -10,7 +10,6 @@ import { IChunkManifest } from '../interfaces/chunk-manifest.interface';
 import { IDiskIOBatch } from '../interfaces/diskio-batch.interface';
 
 import { DiskIOFile } from "./diskio-file.class";
-import { writeFile } from 'node:fs/promises';
 
 
 export class DiskIOFileSmart {
@@ -79,8 +78,8 @@ export class DiskIOFileSmart {
                 this.fhs.set(hash, fh);
                 // Get the size
                 const { size } = await fh.stat();
-                // Create a chunk
-                const chunk = { hash, original: part.length, size: size as number };
+                // Create a chunk with ref setted to 2 at least
+                const chunk = { hash, original: part.length, size: size as number, refs: 2 };
                 // Push to manifest
                 this.Manifest.chunks.push(chunk);
                 // Push to chunks
@@ -236,11 +235,30 @@ export class DiskIOFileSmart {
         return structuredClone(this.Manifest);
     }
 
-    public async delete() {
-        // Get all the files
-        const files = this.Manifest.chunks.map((chunk) => this.fhs.get(chunk.hash)).filter(Boolean) as DiskIOFile[];
+    public async delete(): Promise<IChunkManifest[]> {
+        // Get alone chunks
+        const alones: DiskIOFile[] = [];
+        // Get referenced on other files
+        const referenced: IChunkManifest[] = [];
+        // Iterate to split
+        this.Manifest.chunks.forEach((chunk) => {
+            // Push if hash more references
+            if (chunk.refs > 1) {
+                referenced.push(chunk);
+            };
+            // Find it file
+            const file = this.fhs.get(chunk.hash);
+            // Check not corrupted
+            if (!file) {
+                return;
+            }
+            // Push to alones
+            alones.push(file);
+        });
         // Delete all the files
-        await this.diskio.deleteBatch(files);
+        await this.diskio.deleteBatch(alones);
+        // Return references
+        return referenced;
     }
 
     public async close(): Promise<void> {

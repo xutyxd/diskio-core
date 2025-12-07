@@ -1,7 +1,10 @@
 import { DiskIOFileReadable } from './classes/diskio-file-readable.class';
 import { DiskIOFileWritable } from './classes/diskio-file-writable.class';
 import { DiskIOFile } from './classes/diskio-file.class';
-import { DiskIO } from './classes/diskio.class';
+import { DiskIOFileSmart } from './classes/diskio-file-smart.class';
 
-export { DiskIO, DiskIOFile, DiskIOFileReadable, DiskIOFileWritable };
+import { DiskIO } from './classes/diskio.class';
+import { DiskIOBatch } from './classes/diskio-batch.class';
+
+export { DiskIO, DiskIOBatch, DiskIOFile, DiskIOFileReadable, DiskIOFileWritable, DiskIOFileSmart };
 

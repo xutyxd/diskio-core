@@ -1,6 +1,4 @@
 
-import { compress } from "@mongodb-js/zstd";
-
 import { DiskIO } from "./diskio.class";
 import { DiskIOFile } from "./diskio-file.class";
 import { IChunkManifest } from "../interfaces/chunk-manifest.interface";
@@ -44,7 +42,7 @@ export class DiskIOBatch extends DiskIO implements IDiskIOBatch {
             // Get hash from name
             const hash = file.name.split('/').reverse()[0];
             // Return the manifest
-            return { hash, original: size, size: stats.size as number };
+            return { hash, original: size, size: stats.size as number, refs: 1 };
         });
         // Wait for all the hashes to be ready
         const chunks = await Promise.all(promises);
