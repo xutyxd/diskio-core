@@ -131,7 +131,9 @@ describe('DiskIOFileSmart class', () => {
 
             try {
                 expect(chunks).toEqual(videoBResult);
-                expect(manifestBackup).toEqual(manifest);
+                // Update because now has 2 ref each chunk
+                const result = structuredClone(chunks).map((chunk) => ({ ...chunk, refs: 2 }));
+                expect(manifestBackup).toEqual({ ...manifest, chunks: result });
             } finally {
                 // Clean up
                 await diskIOFileSmartBackup.delete();
