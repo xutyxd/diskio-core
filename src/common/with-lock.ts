@@ -18,50 +18,46 @@ async function checkProcessAlive(pid: number) {
 
 export async function withLock<T>(fn: () => Promise<T>): Promise<T> {
     const myTicket = `${process.pid}-${randomUUID()}`;
-    const start = Date.now();
     let attempt = 0;
 
-    // while (true) {
-    //     try {
-    //         // Create folder of lock
-    //         await mkdir(LOCK_DIR, { recursive: false });
-    //         // Fill with ticket
-    //         await writeFile(LOCK_OWNER, myTicket, { flag: 'wx' });
-    //         // We own it, continue with operation
-    //         break;
-    //     } catch (e) {
-    //         // Get node error type
-    //         const error = e as NodeJS.ErrnoException;
-    //         // Check type of error
-    //         if (error.code !== 'EEXIST') {
-    //             throw e;
-    //         }
-    //         // Stale lock detection
-    //         try {
-    //             // Read current ticket
-    //             const ticket = await readFile(LOCK_OWNER, 'utf8').catch(() => '');
-    //             // Get the old process id
-    //             const oldPid = ticket ? parseInt(ticket.split('-')[0]) : NaN;
-    //             // Check exists and is alive
-    //             if (oldPid && !(await checkProcessAlive(oldPid))) {
-    //                 // Owner dead -> try to steal the lock
-    //                 await rmdir(LOCK_DIR, { recursive: true });
-    //                 // Retry again
-    //                 continue;
-    //             }
-    //         } catch { }
-    //         // Exponential backoff: 5 -> 10 -> 20 -> 40 ms
-    //         const delay = Math.min(5 * 2 ** Math.min(attempt++, 5), 40);
-    //         await setTimeout(delay);
-    //     }
-    // }
-    const acquired = Date.now();
-    // console.log(`Lock waited: ${acquired - start} ms (attempts: ${attempt})`);
+    while (true) {
+        try {
+            // Create folder of lock
+            await mkdir(LOCK_DIR, { recursive: false });
+            // Fill with ticket
+            await writeFile(LOCK_OWNER, myTicket, { flag: 'wx' });
+            // We own it, continue with operation
+            break;
+        } catch (e) {
+            // Get node error type
+            const error = e as NodeJS.ErrnoException;
+            // Check type of error
+            if (error.code !== 'EEXIST') {
+                throw e;
+            }
+            // Stale lock detection
+            try {
+                // Read current ticket
+                const ticket = await readFile(LOCK_OWNER, 'utf8').catch(() => '');
+                // Get the old process id
+                const oldPid = ticket ? parseInt(ticket.split('-')[0]) : NaN;
+                // Check exists and is alive
+                if (oldPid && !(await checkProcessAlive(oldPid))) {
+                    // Owner dead -> try to steal the lock
+                    await rmdir(LOCK_DIR, { recursive: true });
+                    // Retry again
+                    continue;
+                }
+            } catch { }
+            // Exponential backoff: 5 -> 10 -> 20 -> 40 ms
+            const delay = Math.min(5 * 2 ** Math.min(attempt++, 5), 40);
+            await setTimeout(delay);
+        }
+    }
     try {
         return await fn();
     } finally {
         // // Only remove if we still own it (race with steal is impossible because we just released)
-        // await rmdir(LOCK_DIR, { recursive: true }).catch((error) => { console.warn('Error freeing: ', error)});
-        // console.log(`Lock held: ${Date.now() - acquired} ms`);
+        await rmdir(LOCK_DIR, { recursive: true }).catch((error) => { console.warn('Error freeing: ', error)});
     }
 }

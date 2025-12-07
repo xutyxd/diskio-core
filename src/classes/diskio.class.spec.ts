@@ -3,12 +3,16 @@ import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { DiskIOFile } from './diskio-file.class';
 import { DiskIO } from './diskio.class';
+import { withoutError } from '../common/without-error';
+import { withLock } from '../common/with-lock';
 
 describe('DiskIO class', () => {
     beforeEach(async () => {
-        try {
-            await unlink('./mocks/diskio-a/diskio.dat');
-        } catch { }
+        await withoutError(() => withLock(() => unlink('./mocks/diskio-a/diskio.dat')));
+    });
+
+    afterEach(async () => {
+        await withoutError(() => withLock(() => unlink('./mocks/diskio-a/diskio.dat')));
     });
 
     describe('DiskIO instance', () => {
@@ -147,6 +151,7 @@ describe('DiskIO class', () => {
     describe('DiskIO get', () => {
         it('should throw an error if the name is diskio storage', async () => {
             const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
+            await diskio.ready;
 
             try {
                 await diskio.get('diskio.dat');
@@ -208,9 +213,9 @@ describe('DiskIO class', () => {
     });
 
     describe('DiskIO getSync', () => {
-        it('should throw an error if the name is diskio storage', () => {
+        it('should throw an error if the name is diskio storage', async () => {
             const diskio = new DiskIO('./mocks/diskio-a', 10 * 1024 * 1024);
-
+            await diskio.ready;
             try {
                 diskio.getSync('diskio.dat');
             } catch (error) {

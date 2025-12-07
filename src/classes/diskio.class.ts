@@ -7,14 +7,19 @@ import { exists } from '../common/fs-extends';
 import { IDiskIO } from '../interfaces/diskio.interface';
 import { DiskIOFile } from './diskio-file.class';
 import { withLock } from '../common/with-lock';
+import { withoutError } from '../common/without-error';
 
 const exec = promisify(child_process.exec);
 
 export class DiskIO implements IDiskIO {
     private RESERVED_FILE = 'diskio.dat';
-    private RESERVED_SIZE;
+
+    protected RESERVED_SIZE;
+
     private path: { folder: string, diskio: string };
-    private optimal = 4096;
+
+    protected optimal = 4096;
+
     private depth;
 
     public get folder() {
@@ -126,7 +131,7 @@ export class DiskIO implements IDiskIO {
         }
     }
 
-    private async stabilize(expected: number) {
+    protected async stabilize(expected: number) {
         const diskioExists = await exists(this.path.diskio);
         // Check if diskio file exists
         if (!diskioExists) {
@@ -139,7 +144,7 @@ export class DiskIO implements IDiskIO {
         const folder = await this.size.folder();
         const difference = expected - folder + diskio;
 
-        return await withLock(async () => {
+        await withLock(async () => {
             // Truncate the difference
             await truncate(this.path.diskio, difference);
         });
@@ -159,7 +164,7 @@ export class DiskIO implements IDiskIO {
         truncateSync(this.path.diskio, difference);
     }
 
-    private async allocate(size: number) {
+    protected async allocate(size: number) {
         const diskio = await this.size.diskio();
         // Check if the size is less than the available size
         if (size > diskio) {
@@ -208,7 +213,7 @@ export class DiskIO implements IDiskIO {
         return path;
     }
 
-    public async create(name: string, collision = false): Promise<DiskIOFile> {
+    protected async Create(name: string, collision = false): Promise<DiskIOFile> {
         // Check if the name is a valid string
         if (typeof name !== 'string') {
             throw new Error('The name is not a string');
@@ -221,7 +226,7 @@ export class DiskIO implements IDiskIO {
         const path = this.createPath(name, collision);
         const relative = join(this.path.folder, path);
         // Folders required to create the file
-        await withLock(async () => await mkdir(relative, { recursive: true }));
+        await mkdir(relative, { recursive: true });
         // Create file path
         const filePath = join(relative, name);
         // Check if file exists
@@ -229,12 +234,25 @@ export class DiskIO implements IDiskIO {
             // Recall trying to get a new path without the file
             return this.create(name, collision);
         }
-        // Create the file
-        await withLock(async () => await writeFile(filePath, Buffer.alloc(0)));
-        // Update the diskio file (folder metadata have size)
-        await this.stabilize(this.RESERVED_SIZE);
+        // Create the file (not locked because empty file not consume space)
+        await writeFile(filePath, Buffer.alloc(0));
         // Return the file
         return this.get(filePath.replace(this.path.folder, ''));
+    }
+
+    public async create(name: string, collision = false): Promise<DiskIOFile> {
+        // Get the path for the file
+        const path = this.createPath(name, collision);
+        // Count all folders
+        const folders = path.split('/').filter(Boolean).length;
+        // Allocate maximum possible space
+        await this.allocate(folders * this.optimal);
+        // Create the file
+        const file = this.Create(name, collision);
+        // Stabilize the diskio space, maybe not all allocated space is used
+        await this.stabilize(this.RESERVED_SIZE);
+        // Return the file
+        return file;
     }
 
     public createSync(name: string, collision = false): DiskIOFile {
@@ -412,7 +430,7 @@ export class DiskIO implements IDiskIO {
         return buffer;
     }
 
-    private async Write(fh: FileHandle, data: Buffer, position: number) {
+    protected async Write(fh: FileHandle, data: Buffer, position: number) {
         // Calculate how many writes are needed
         let writes = Math.ceil(data.length / this.optimal);
         // Set index to 0
@@ -428,7 +446,8 @@ export class DiskIO implements IDiskIO {
             // Calculate how many bytes to write
             const toWrite = this.optimal > remaining ? remaining : this.optimal;
             // Write the buffer
-            promises.push(/*withLock(async () => await */fh.write(data, offset, toWrite, position + offset))/*)*/;
+            // Not locked because it's pre-allocated
+            promises.push(fh.write(data, offset, toWrite, position + offset));
             // Increment the index
             index++;
         }
@@ -465,18 +484,12 @@ export class DiskIO implements IDiskIO {
         }
     }
 
-    public async delete(fh: FileHandle, name: string[]) {
+    protected async Delete(fh: FileHandle, name: string[]) {
         // Close the file handle
         await fh.close();
         const path = join(this.path.folder, ...name);
-        // Check file still exists
-        const exists = await this.exists(join(...name));
-        // Already deleted
-        if (!exists) {
-            return;
-        }
-        // Delete the file
-        await withLock(async () => await unlink(join(path)));
+        // Delete the file without check if exists        
+        await withoutError(async () => unlink(path));
         let copy = [...name];
         // Remove last element until get undefined
         while (copy.pop()) {
@@ -489,12 +502,13 @@ export class DiskIO implements IDiskIO {
                 // If have files or folders, stop
                 break;
             }
-            try {
-                // Delete the folder
-                await withLock(async () => await rmdir(parent));
-                // Maybe throw an ENOENT error cause parallel execution of delete from DiskIOFileSmart
-            } catch { }
+            await withoutError(async () => rmdir(parent));
         }
+    }
+
+    public async delete(fh: FileHandle, name: string[]) {
+        // Delete the file
+        await this.Delete(fh, name);
         // Update the diskio file
         await this.stabilize(this.RESERVED_SIZE);
     }

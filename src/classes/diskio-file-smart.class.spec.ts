@@ -1,5 +1,5 @@
 
-import { open, unlink, writeFile } from 'fs/promises';
+import { open, unlink } from 'fs/promises';
 
 import { blake3 } from "hash-wasm";
 
@@ -8,19 +8,26 @@ import videoAResult from '../../mocks/data/video-a-chunks.data.json';
 import videoBResult from '../../mocks/data/video-b-chunks.data.json';
 
 import { DiskIOFileSmart } from './diskio-file-smart.class';
-import { DiskIO } from './diskio.class';
+import { DiskIOBatch } from './diskio-batch.class';
 
 describe('DiskIOFileSmart class', () => {
-    let diskio: DiskIO;
+    let diskio: DiskIOBatch;
 
     beforeEach(async () => {
         try {
             await unlink('./mocks/diskio-smart/diskio.dat');
+            await new Promise(r => setTimeout(r, 5)); // small microtask drain
         } catch { }
         // Define a basic diskIO with 10MB
-        diskio = new DiskIO('./mocks/diskio-smart', 20 * 1024 * 1024);
+        diskio = new DiskIOBatch('./mocks/diskio-smart', 20 * 1024 * 1024);
         // Wait to be ready
         await diskio.ready;
+    });
+    afterEach(async () => {
+        try {
+            await unlink('./mocks/diskio-smart/diskio.dat');
+            await new Promise(r => setTimeout(r, 5)); // small microtask drain
+        } catch { }
     });
 
     describe('DiskIOFileSmart instance', () => {
@@ -156,7 +163,7 @@ describe('DiskIOFileSmart class', () => {
             expect(readedHash).toBe(hash);
         });
 
-        it('should read a file write 2 times', async () => {
+        it('should read a file wrote 2 times', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -175,8 +182,6 @@ describe('DiskIOFileSmart class', () => {
             await diskIOFileSmart.write(buffer);
             // Flush again
             await diskIOFileSmart.flush();
-            // Close the file
-            // await file.close();
             // Get manifest
             const { chunks } = diskIOFileSmart.manifest;
             // Expect 2 chunks equals
@@ -192,6 +197,36 @@ describe('DiskIOFileSmart class', () => {
                 // Clean up
                 await diskIOFileSmart.delete();
             } catch { }
+        });
+
+        it('should read a real file', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            //Open the file
+            const file = await open('./mocks/video-a.mp4', 'r+');
+            // Read the file
+            const buffer = await file.readFile();
+            // Get original hash
+            const hash = await blake3(buffer);
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to assure file is fully wrote
+            await diskIOFileSmart.flush();
+            // Close the file
+            await file.close();
+            // Get manifest
+            const { chunks } = diskIOFileSmart.manifest;
+            expect(chunks).toEqual(videoAResult);
+            // Now read the whole file
+            const readed = await diskIOFileSmart.read(0, buffer.length);
+            // Get the new hash of the file
+            const newHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            // Expects it works
+            expect(newHash).toBe(hash);
         });
     });
 });
