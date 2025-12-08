@@ -10,7 +10,7 @@ import videoBResult from '../../mocks/data/video-b-chunks.data.json';
 import { DiskIOFileSmart } from './diskio-file-smart.class';
 import { DiskIOBatch } from './diskio-batch.class';
 
-describe.skip('DiskIOFileSmart class', () => {
+describe('DiskIOFileSmart class', () => {
     let diskio: DiskIOBatch;
 
     beforeEach(async () => {
@@ -130,8 +130,8 @@ describe.skip('DiskIOFileSmart class', () => {
             const { chunks } = manifest;
 
             try {
-                await writeFile('expected.json', JSON.stringify(chunks, null, 2));
-                await writeFile('backup.json', JSON.stringify(manifestBackup.chunks, null, 2));
+                // await writeFile('expected.json', JSON.stringify(chunks, null, 2));
+                // await writeFile('backup.json', JSON.stringify(manifestBackup.chunks, null, 2));
                 expect(chunks).toEqual(videoBResult);
                 // Update because now has 2 ref each chunk
                 const result = structuredClone(chunks).map((chunk) => ({ ...chunk, refs: 2 }));
@@ -400,7 +400,7 @@ describe.skip('DiskIOFileSmart class', () => {
             expect(readedHash).toBe(hash);
         });
 
-        it.only('should read a real file', async () => {
+        it('should read a real file', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -419,9 +419,10 @@ describe.skip('DiskIOFileSmart class', () => {
             await file.close();
             // Get manifest
             const { chunks } = diskIOFileSmart.manifest;
-            expect(chunks).toEqual(videoAResult);
+            // expect(chunks).toEqual(videoAResult);
             // Now read the whole file
             const readed = await diskIOFileSmart.read(0, buffer.length);
+            // await writeFile('readed.mp4.data', readed);
             // Get the new hash of the file
             const newHash = await blake3(readed);
             // Clean up

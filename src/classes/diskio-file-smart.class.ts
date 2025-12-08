@@ -59,9 +59,27 @@ export class DiskIOFileSmart {
         return this.Rabin || (this.Rabin = await create(AVG_BITS, MIN_SIZE, MAX_SIZE, WINDOW_SIZE, POLYNOMIAL));
     }
 
+    private toTail(buffer: Buffer, before: boolean): Buffer {
+        // Create a new buffer
+        const temp = Buffer.allocUnsafe((this.tail?.length || 0) + buffer.length);
+        if (before) {
+            // First buffer
+            buffer.copy(temp);
+        }
+        // If there is a tail
+        if (this.tail) {
+            // Copy the tail to temporal
+            this.tail.copy(temp, before ? buffer.length : 0);
+        }
+        if (!before) {
+            // Copy the data from the tail length
+            buffer.copy(temp, this.tail?.length || 0);
+        }
+        // Update the tail and return it
+        return this.tail = temp;
+    }
+
     private async Write(parts: Buffer[]): Promise<IChunkManifest[]> {
-        console.log('Writing:', parts.length);
-        console.log('size:', parts.map((part) => part.length));
         const chunks: IChunkManifest[] = [];
         // Define a missing chunk array
         const missing: { path: string, hash: string, data: Buffer }[] = [];
@@ -188,19 +206,14 @@ export class DiskIOFileSmart {
         let buffer: Buffer;
         // Check if there is a tail
         if (this.tail && !isTail) {
-            // Create a new buffer
-            buffer = Buffer.allocUnsafe(data.length + this.tail.length);
-            // Copy the tail
-            this.tail.copy(buffer);
-            // Copy the data from the tail length
-            data.copy(buffer, this.tail.length);
+            // Move the data to tail
+            buffer = this.toTail(data, false);
         } else {
             buffer = data;
         }
         // Avoid writing small files to feed correctly rabin
         if (buffer.length < this.FIXED_SIZE && !isTail) {
-            console.log('Increasing tail to: ', buffer.length);
-            // Move to tail and return empty manifest
+            // Overwrite tail cause maybe buffer already is tail
             this.tail = buffer;
             return { chunks: [] };
         }
@@ -209,20 +222,16 @@ export class DiskIOFileSmart {
             // Get first part
             const toFingerprint = buffer.subarray(0, Math.min(buffer.length, this.FIXED_SIZE));
             // Move the rest to tail
-            this.tail = buffer.subarray(this.FIXED_SIZE);
-            console.log('Tail increased to:', this.tail.length);
+            this.toTail(buffer.subarray(this.FIXED_SIZE), false);
             // Set as buffer to fingerprint
             buffer = toFingerprint;
         }
         // Create rabin
         const rabin = await this.rabin();
-        console.log('Data to fingerprint:', buffer.length);
         // Get cut points
         const cutPoints = [ ...rabin.fingerprint(buffer)] as unknown as number[];
-        console.log('Cut points:', cutPoints);
         // Get last part, it will be the tail
         const point = buffer.length - cutPoints.reduce((total, current) => total += Number(current), 0);
-        console.log('Point:', point);
         // If need to add a point
         if (point > 0) {
             cutPoints.push(point);
@@ -235,26 +244,19 @@ export class DiskIOFileSmart {
             // Get the part
             return buffer.subarray(before, Math.min(before + numbered, buffer.length));
         });
-
+        // If there is no parts set one as default
         if (!parts.length) {
-            parts = [buffer];
+            parts = [ buffer ];
         }
-        console.log('Parts:', parts.length);
+        // If is not tail
         if (!isTail) {
             // Get last part
             const last = parts.pop();
-            if (this.tail && last) {
-                // Create a new buffer
-                const temp = Buffer.allocUnsafe(this.tail.length + last.length);
-                // Copy the tail to temporal
-                this.tail.copy(temp);
-                // Copy the data from the tail length
-                last.copy(buffer, this.tail.length);
-                // Update the tail
-                this.tail = temp;
+            // Move it to tail
+            if (last) {
+                this.toTail(last, true);
             } else {
-                // Update the tail
-                this.tail = last;
+                this.tail = undefined;
             }
         }
         // Write parts
@@ -271,11 +273,10 @@ export class DiskIOFileSmart {
             this.tail = undefined;
             return;
         }
-        console.log('Flushing tail:', this.tail.length);
         // Write the tail
         const wrote = await this.write(this.tail, true);
         // Clean the tail
-        this.tail = Buffer.alloc(0);
+        this.tail = undefined;
         // Update the chunk
         const { chunks } = wrote;
         // Return the manifest

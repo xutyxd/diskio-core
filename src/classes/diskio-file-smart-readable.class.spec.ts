@@ -7,7 +7,7 @@ import { DiskIOFileSmartReadable } from "./diskio-file-smart-readable.class";
 import { DiskIOFileSmart } from "./diskio-file-smart.class";
 
 
-describe.skip('DiskIOFileSmartReadable class', () => {
+describe('DiskIOFileSmartReadable class', () => {
     let diskio: DiskIOBatch;
 
     beforeEach(async () => {

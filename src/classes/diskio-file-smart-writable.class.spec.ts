@@ -29,7 +29,7 @@ describe('DiskIOFileSmartWritable class', () => {
         } catch { }
     });
 
-    describe.skip('DiskIOFileSmartWritable instance', () => {
+    describe('DiskIOFileSmartWritable instance', () => {
         it('should instance a DiskIOFileSmartWritable class', async () => {
             // Create an empty manifest
             const manifest = { chunks: [] };
@@ -47,7 +47,7 @@ describe('DiskIOFileSmartWritable class', () => {
     });
 
     describe('DiskIOFileSmartWritable write', () => {
-        it.skip('should write a buffer', async () => {
+        it('should write a buffer', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -87,8 +87,6 @@ describe('DiskIOFileSmartWritable class', () => {
             await diskIOFileSmart.delete();
             // Get manifest generated
             const { chunks } = diskIOFileSmart.manifest;
-            await writeFile('generated.json', JSON.stringify(chunks, null, 2));
-            // console.warn('Manifest:', chunks);
             expect(chunks).toEqual(videoAResult);
         });
     });
