@@ -32,8 +32,12 @@ export class DiskIOFileSmart {
             await diskio.ready;
             // Iterate over the chunks with a map
             const promises = self.Manifest.chunks.map(async (chunk) => {
+                // Get path
+                const path = self.diskio.createPath(chunk.hash, true);
+                // Get full path
+                const fullPath = join(path, chunk.hash);
                 // Get the file forcing to exists
-                const file = await self.diskio.get(chunk.hash, true);
+                const file = await self.diskio.get(fullPath, true);
                 // Add the file to the map
                 self.fhs.set(chunk.hash, file);
             });
