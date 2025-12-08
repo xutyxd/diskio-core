@@ -496,7 +496,7 @@ export class DiskIO implements IDiskIO {
             // Get folder path
             const parent = join(this.path.folder, ...copy);
             // Check if folder parent is empty
-            const readed = await readdir(parent);
+            const readed = (await withoutError(() => readdir(parent))) || [];
             // Avoid to delete if have files or folders
             if (readed.length !== 0) {
                 // If have files or folders, stop

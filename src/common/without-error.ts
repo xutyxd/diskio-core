@@ -1,6 +1,8 @@
 
-export async function withoutError(fn: () => Promise<unknown> | unknown): Promise<void> {
+export async function withoutError<T>(fn: () => Promise<T | undefined> | T | undefined): Promise<T | undefined> {
     try {
         await fn();
-    } catch (e) { }
+    } catch (e) {
+        return undefined;
+    }
 }

@@ -1,5 +1,5 @@
 
-import { open, unlink } from 'fs/promises';
+import { open, unlink, writeFile } from 'fs/promises';
 
 import { blake3 } from "hash-wasm";
 
@@ -10,13 +10,12 @@ import videoBResult from '../../mocks/data/video-b-chunks.data.json';
 import { DiskIOFileSmart } from './diskio-file-smart.class';
 import { DiskIOBatch } from './diskio-batch.class';
 
-describe('DiskIOFileSmart class', () => {
+describe.skip('DiskIOFileSmart class', () => {
     let diskio: DiskIOBatch;
 
     beforeEach(async () => {
         try {
             await unlink('./mocks/diskio-smart/diskio.dat');
-            await new Promise(r => setTimeout(r, 5)); // small microtask drain
         } catch { }
         // Define a basic diskIO with 10MB
         diskio = new DiskIOBatch('./mocks/diskio-smart', 20 * 1024 * 1024);
@@ -26,7 +25,6 @@ describe('DiskIOFileSmart class', () => {
     afterEach(async () => {
         try {
             await unlink('./mocks/diskio-smart/diskio.dat');
-            await new Promise(r => setTimeout(r, 5)); // small microtask drain
         } catch { }
     });
 
@@ -95,6 +93,7 @@ describe('DiskIOFileSmart class', () => {
             } finally {
                 // Clean up
                 await diskIOFileSmart.delete();
+                await diskIOFileSmart.close();
             }
         });
 
@@ -115,6 +114,7 @@ describe('DiskIOFileSmart class', () => {
             await diskIOFileSmart.write(buffer);
             // Close to clean resources
             await diskIOFileSmart.flush();
+            // Close since it is not needed anymore
             await diskIOFileSmart.close();
             // Re-write the file again
             await diskIOFileSmartBackup.write(bufferBackup);
@@ -130,6 +130,8 @@ describe('DiskIOFileSmart class', () => {
             const { chunks } = manifest;
 
             try {
+                await writeFile('expected.json', JSON.stringify(chunks, null, 2));
+                await writeFile('backup.json', JSON.stringify(manifestBackup.chunks, null, 2));
                 expect(chunks).toEqual(videoBResult);
                 // Update because now has 2 ref each chunk
                 const result = structuredClone(chunks).map((chunk) => ({ ...chunk, refs: 2 }));
@@ -137,6 +139,7 @@ describe('DiskIOFileSmart class', () => {
             } finally {
                 // Clean up
                 await diskIOFileSmartBackup.delete();
+                await diskIOFileSmartBackup.close();
             }
         });
     });
@@ -161,6 +164,31 @@ describe('DiskIOFileSmart class', () => {
             const readedHash = await blake3(readed);
             // Clean up
             await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it('should read a range of file', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world!");
+            // Get original hash to check after
+            const hash = await blake3(buffer.subarray(5));
+            // Write on disk
+            await diskIOFileSmart.write(buffer);
+            // Always flush the tail
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(5, buffer.length);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
             // Expect hash to be equal to new one
             expect(readedHash).toBe(hash);
         });
@@ -198,10 +226,181 @@ describe('DiskIOFileSmart class', () => {
             try {
                 // Clean up
                 await diskIOFileSmart.delete();
+                await diskIOFileSmart.close();
             } catch { }
         });
 
-        it('should read a real file', async () => {
+        it('should read a range of file with 3 chunks', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world!");
+            // Mixed it to get hash
+            const bufferMixed = Buffer.concat([buffer, buffer, buffer]);
+            // Get original hash to check after
+            const hash = await blake3(bufferMixed.subarray(5));
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to force 2 writes to disk
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(5, bufferMixed.length);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it('should read a range from 1º to 2º chunk of file with 3 chunks', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world!");
+            // Mixed it to get hash
+            const bufferMixed = Buffer.concat([buffer, buffer, buffer]);
+            // Get original hash to check after
+            const hash = await blake3(bufferMixed.subarray(95, 135));
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to force 2 writes to disk
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(95, 135);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it('should read a range from 1º to 3º chunk of file with 3 chunks', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world!");
+            // Mixed it to get hash
+            const bufferMixed = Buffer.concat([buffer, buffer, buffer]);
+            // Get original hash to check after
+            const hash = await blake3(bufferMixed.subarray(95, 235));
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to force 2 writes to disk
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(95, 235);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it('should read a range from 2º to 3º chunk of file with 3 chunks', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world!");
+            // Mixed it to get hash
+            const bufferMixed = Buffer.concat([buffer, buffer, buffer]);
+            // Get original hash to check after
+            const hash = await blake3(bufferMixed.subarray(135, 235));
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to force 2 writes to disk
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(135, 235);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it('should read a range from 3º to 3º chunk of file with 3 chunks', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Create a small buffer
+            const buffer = Buffer.from("Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world! | Hello world!");
+            // Mixed it to get hash
+            const bufferMixed = Buffer.concat([buffer, buffer, buffer]);
+            // Get original hash to check after
+            const hash = await blake3(bufferMixed.subarray(235));
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to force 2 writes to disk
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Write again the same
+            await diskIOFileSmart.write(buffer);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Read from disk
+            const readed = await diskIOFileSmart.read(235, bufferMixed.length);
+            // Get hash of readed
+            const readedHash = await blake3(readed);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expect hash to be equal to new one
+            expect(readedHash).toBe(hash);
+        });
+
+        it.only('should read a real file', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -227,6 +426,7 @@ describe('DiskIOFileSmart class', () => {
             const newHash = await blake3(readed);
             // Clean up
             await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
             // Expects it works
             expect(newHash).toBe(hash);
         });

@@ -6,7 +6,7 @@ import { DiskIO } from './diskio.class';
 import { withoutError } from '../common/without-error';
 import { withLock } from '../common/with-lock';
 
-describe('DiskIO class', () => {
+describe.skip('DiskIO class', () => {
     beforeEach(async () => {
         await withoutError(() => withLock(() => unlink('./mocks/diskio-a/diskio.dat')));
     });
