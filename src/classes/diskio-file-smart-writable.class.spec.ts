@@ -1,4 +1,4 @@
-import { open, unlink, writeFile } from 'fs/promises';
+import { open, unlink } from 'fs/promises';
 import { pipeline } from 'node:stream/promises';
 
 import { blake3 } from "hash-wasm";
