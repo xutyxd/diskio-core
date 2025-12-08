@@ -11,8 +11,8 @@ export class DiskIOFileSmartWritable extends Writable {
     // Called by the framework for each buffer from the HTTP body
     async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void) {
         try {
-            // Wait to be written
-            await this.file.write(chunk);
+            // Write the chunk
+            await this.file.write(chunk);             
             // Signal backpressure: TCP socket will pause until we call callback()
             callback();
         } catch (err) {

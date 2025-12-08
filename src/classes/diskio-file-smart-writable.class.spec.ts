@@ -9,7 +9,6 @@ import { DiskIOFileSmart } from "./diskio-file-smart.class";
 
 // Results to compare
 import videoAResult from '../../mocks/data/video-a-chunks.data.json';
-import videoBResult from '../../mocks/data/video-b-chunks.data.json';
 
 describe('DiskIOFileSmartWritable class', () => {
     let diskio: DiskIOBatch;
@@ -70,7 +69,7 @@ describe('DiskIOFileSmartWritable class', () => {
             expect(manifest.chunks[0].hash).toEqual(hash);
         });
 
-        it('should stream a real file', async () => {
+        it('should write as stream a real file', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready

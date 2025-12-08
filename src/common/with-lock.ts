@@ -57,7 +57,7 @@ export async function withLock<T>(fn: () => Promise<T>): Promise<T> {
     try {
         return await fn();
     } finally {
-        // // Only remove if we still own it (race with steal is impossible because we just released)
+        // Only remove if we still own it (race with steal is impossible because we just released)
         await rmdir(LOCK_DIR, { recursive: true }).catch((error) => { console.warn('Error freeing: ', error)});
     }
 }

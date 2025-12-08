@@ -208,6 +208,8 @@ export class DiskIOFileSmart {
         if (this.tail && !isTail) {
             // Move the data to tail
             buffer = this.toTail(data, false);
+            // Clear tail
+            this.tail = undefined;
         } else {
             buffer = data;
         }

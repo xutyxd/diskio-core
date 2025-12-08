@@ -1,5 +1,5 @@
 
-import { open, unlink, writeFile } from 'fs/promises';
+import { open, unlink } from 'fs/promises';
 
 import { blake3 } from "hash-wasm";
 
@@ -130,8 +130,6 @@ describe('DiskIOFileSmart class', () => {
             const { chunks } = manifest;
 
             try {
-                // await writeFile('expected.json', JSON.stringify(chunks, null, 2));
-                // await writeFile('backup.json', JSON.stringify(manifestBackup.chunks, null, 2));
                 expect(chunks).toEqual(videoBResult);
                 // Update because now has 2 ref each chunk
                 const result = structuredClone(chunks).map((chunk) => ({ ...chunk, refs: 2 }));
@@ -419,10 +417,9 @@ describe('DiskIOFileSmart class', () => {
             await file.close();
             // Get manifest
             const { chunks } = diskIOFileSmart.manifest;
-            // expect(chunks).toEqual(videoAResult);
+            expect(chunks).toEqual(videoAResult);
             // Now read the whole file
             const readed = await diskIOFileSmart.read(0, buffer.length);
-            // await writeFile('readed.mp4.data', readed);
             // Get the new hash of the file
             const newHash = await blake3(readed);
             // Clean up
