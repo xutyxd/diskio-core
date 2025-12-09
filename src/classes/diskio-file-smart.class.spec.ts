@@ -416,5 +416,39 @@ describe('DiskIOFileSmart class', () => {
             // Expects it works
             expect(newHash).toBe(hash);
         });
+
+        it('should read from a manifest of a written file', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            //Open the file
+            const file = await open('./mocks/video-a.mp4', 'r+');
+            // Read the file
+            const buffer = await file.readFile();
+            // Get original hash
+            const hash = await blake3(buffer);
+            // Write the file
+            await diskIOFileSmart.write(buffer);
+            // Flush to assure file is fully wrote
+            await diskIOFileSmart.flush();
+            // Close the file
+            await file.close();
+            // Create a new file from the manifest
+            const file2 = new DiskIOFileSmart(diskio, diskIOFileSmart.manifest);
+            // Wait to be ready
+            await file2.ready;
+            // Read the file
+            const buffer2 = await file2.read(0, buffer.length);
+            // Close the file
+            await file2.close();
+            // Get the new hash of the file
+            const newHash = await blake3(buffer2);
+            // Clean up
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
+            // Expects it works
+            expect(newHash).toBe(hash);
+        });
     });
 });
