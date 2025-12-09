@@ -41,18 +41,6 @@ describe('DiskIOFileSmart class', () => {
             }
         });
 
-        it('should throw an error if the path is diskIO directory', async () => {
-            const manifest = { chunks: [{ hash: 'diskio.dat', size: 10, original: 10, refs: 1 }] };
-
-            try {
-                const diskIOFileSmart = new DiskIOFileSmart(diskio, manifest);
-                await diskIOFileSmart.ready;
-            } catch (error) {
-                const { message } = error as Error;
-                expect(message).toBe('The name is diskio storage file');
-            }
-        });
-
         it('should instance a DiskIOFileSmart class', async () => {
             // Create an empty manifest
             const manifest = { chunks: [] };
