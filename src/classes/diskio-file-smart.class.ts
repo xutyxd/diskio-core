@@ -103,7 +103,7 @@ export class DiskIOFileSmart {
             // Check if is already referenced
             const reference = this.fhs.get(hash);
             // Check if path exists
-            const exists = reference || await this.diskio.exists(path);
+            const exists = reference || await this.diskio.exists(join(path, hash));
             // Push to manifest
             if (exists) {
                 // Get fh for it
