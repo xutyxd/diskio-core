@@ -28,13 +28,13 @@ export class DiskIOBatch extends DiskIO implements IDiskIOBatch {
         return files;
     }
 
-    public async writeBatch(toWrite: { file: DiskIOFile, data: Buffer, size: number }[]): Promise<IChunkManifest[]> {
+    public async writeBatch(toWrite: { file: DiskIOFile, data: Buffer, size: number, index: number }[]): Promise<IChunkManifest[]> {
         // Calculate the size of the data
         const toAllocate = toWrite.reduce((total, current) => total + current.data.length, 0);
         // Allocate maximum possible space
         await this.allocate(toAllocate);
         // Create a promise array
-        const promises = toWrite.map(async ({ file, data, size }) => {
+        const promises = toWrite.map(async ({ file, data, size, index }) => {
             // Write the data
             await super.Write(file['fh'], data, 0);
             // Get the stats
@@ -42,7 +42,7 @@ export class DiskIOBatch extends DiskIO implements IDiskIOBatch {
             // Get hash from name
             const hash = file.name.split('/').reverse()[0];
             // Return the manifest
-            return { hash, original: size, size: stats.size as number, refs: 1 };
+            return { hash, original: size, size: stats.size as number, refs: 1, index };
         });
         // Wait for all the hashes to be ready
         const chunks = await Promise.all(promises);

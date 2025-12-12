@@ -84,11 +84,14 @@ export class DiskIOFileSmart {
     }
 
     private async Write(parts: Buffer[]): Promise<IChunkManifest[]> {
+        // Get already chunked
+        const chunked = this.Manifest.chunks.length;
         const chunks: IChunkManifest[] = [];
         // Define a missing chunk array
-        const missing: { path: string, hash: string, data: Buffer }[] = [];
+        const missing: { path: string, hash: string, data: Buffer, index: number }[] = [];
         // Iterate over the parts
-        for (const part of parts) {
+        for (const [index, part] of parts.entries()) {
+            const position = chunked + index;         
             // Get the hash
             const hash = await blake3(part);
             // Get possible path
@@ -106,7 +109,7 @@ export class DiskIOFileSmart {
                 // Get the size
                 const { size } = await fh.stat();
                 // Create a chunk with ref setted to 2 at least
-                const chunk = { hash, original: part.length, size: size as number, refs: 2 };
+                const chunk = { hash, original: part.length, size: size as number, refs: 2, index: position };
                 // Push to manifest
                 this.Manifest.chunks.push(chunk);
                 // Push to chunks
@@ -114,7 +117,7 @@ export class DiskIOFileSmart {
                 continue;
             }
 
-            missing.push({ path, hash, data: part });
+            missing.push({ path, hash, data: part, index: position });
         }
         // Check if there is missing chunks
         if (missing.length) {
@@ -122,16 +125,16 @@ export class DiskIOFileSmart {
             const files = await this.diskio.createBatch(missing.map(({ hash }) => hash));
             // Add data to files
             const promises = files.map(async ({ name, file }) => {
-                const { data } = missing.find(({ hash }) => hash === name) || {};
+                const { data, index } = missing.find(({ hash }) => hash === name) || {};
                 
-                if (!data) {
+                if (!data || index === undefined) {
                     throw new Error('File corrupted!');
                 }
                 const size = data?.length;
                 // Compress data
                 const compressed = await compress(data, 3);
 
-                return { name, file, data: compressed, size };
+                return { name, file, data: compressed, size, index };
             });
             // Wait for all the data to be compressed
             const withData = await Promise.all(promises);
@@ -150,10 +153,14 @@ export class DiskIOFileSmart {
                 }
                 this.fhs.set(hash, part.file);
             });
-            // Push chunks to the manifest to keep updated
-            this.Manifest.chunks.push(...missingWrites);
+            // Get chunk length to sum to index
+            const { length } = this.Manifest.chunks;
+            // Update chunks
+            const processed = missingWrites.map((chunk, index) => ({ ...chunk, index: length + index }));
+            // Push chunks to the manifest to keep updated and update index
+            this.Manifest.chunks.push(...processed);
             // Push to chunk array
-            chunks.push(...missingWrites);
+            chunks.push(...processed);
         }
         // Return the chunks
         return chunks;

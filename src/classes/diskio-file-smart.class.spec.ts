@@ -30,7 +30,7 @@ describe('DiskIOFileSmart class', () => {
 
     describe('DiskIOFileSmart instance', () => {
         it('should throw an error if the path does not exist', async () => {
-            const manifest = { chunks: [{ hash: '4ffe02e5e92cfile.data', size: 10, original: 10, refs: 1 }] };
+            const manifest = { chunks: [{ hash: '4ffe02e5e92cfile.data', size: 10, original: 10, refs: 1, index: 0 }] };
 
             try {
                 const diskIOFileSmart = new DiskIOFileSmart(diskio, manifest);
