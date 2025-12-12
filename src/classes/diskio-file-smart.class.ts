@@ -256,7 +256,7 @@ export class DiskIOFileSmart {
             const before = self.slice(0, index).reduce((bytes, point) => bytes + Number(point), 0);
             // Get the part
             return buffer.subarray(before, Math.min(before + numbered, buffer.length));
-        });
+        }).filter(({ length }) => length);
         // If there is no parts set one as default
         if (!parts.length) {
             parts = [ buffer ];
@@ -274,6 +274,19 @@ export class DiskIOFileSmart {
         }
         // Write parts
         const chunks = await this.Write(parts);
+        // Check if there is still tail and bigger than fixed size
+        if (!isTail && this.tail && this.tail.length > this.FIXED_SIZE) {
+            // Get diff
+            const diff = this.tail.length - this.FIXED_SIZE;
+            // Get the last part of the tail to push
+            const last = this.tail.subarray(diff);
+            // Update the tail
+            this.tail = this.tail.subarray(0, diff);
+            // Write the tail
+            const tail = await this.write(last); // It will be pushed to tail again
+            // Update the chunks
+            chunks.push(...tail.chunks);
+        }
         // Create a manifest
         const manifest: IDiskIOFileManifest = { chunks };
         // Return the data manifest
