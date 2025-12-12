@@ -18,7 +18,6 @@ export class DiskIOFileSmart {
     private Manifest: IDiskIOFileManifest;
 
     private fhs: Map<string, DiskIOFile> = new Map();
-    private Rabin?: Rabin;
     private tail?: Buffer;
 
     public ready: Promise<DiskIOFileSmart>;
@@ -38,6 +37,11 @@ export class DiskIOFileSmart {
                 const fullPath = join(path, chunk.hash);
                 // Get the file forcing to exists
                 const file = await self.diskio.get(fullPath, true);
+                // Check if is already setted
+                if (self.fhs.has(chunk.hash)) {
+                    await file.close();
+                    return;
+                }
                 // Add the file to the map
                 self.fhs.set(chunk.hash, file);
             });
@@ -59,8 +63,8 @@ export class DiskIOFileSmart {
 
         const WINDOW_SIZE = 64;
         const POLYNOMIAL = 0x3DA3358B4DC173n;
-
-        return this.Rabin || (this.Rabin = await create(AVG_BITS, MIN_SIZE, MAX_SIZE, WINDOW_SIZE, POLYNOMIAL));
+        // Always return new instance
+        return await create(AVG_BITS, MIN_SIZE, MAX_SIZE, WINDOW_SIZE, POLYNOMIAL);
     }
 
     private toTail(buffer: Buffer, before: boolean): Buffer {
@@ -91,21 +95,25 @@ export class DiskIOFileSmart {
         const missing: { path: string, hash: string, data: Buffer, index: number }[] = [];
         // Iterate over the parts
         for (const [index, part] of parts.entries()) {
-            const position = chunked + index;         
+            const position = chunked + index;
             // Get the hash
             const hash = await blake3(part);
             // Get possible path
             const path = this.diskio.createPath(hash, true);
-            // Check if path exists
-            const exists = await this.diskio.exists(path);
             // Check if is already referenced
             const reference = this.fhs.get(hash);
+            // Check if path exists
+            const exists = reference || await this.diskio.exists(path);
             // Push to manifest
             if (exists) {
                 // Get fh for it
-                const fh = reference ?? await this.diskio.get(join(path, hash));
-                // Save the ref
-                this.fhs.set(hash, fh);
+                let fh = reference;
+
+                if (!fh) {
+                    fh = await this.diskio.get(join(path, hash));
+                    // Save the ref
+                    this.fhs.set(hash, fh);
+                }
                 // Get the size
                 const { size } = await fh.stat();
                 // Create a chunk with ref setted to 2 at least
@@ -153,17 +161,15 @@ export class DiskIOFileSmart {
                 }
                 this.fhs.set(hash, part.file);
             });
-            // Get chunk length to sum to index
-            const { length } = this.Manifest.chunks;
-            // Update chunks
-            const processed = missingWrites.map((chunk, index) => ({ ...chunk, index: length + index }));
             // Push chunks to the manifest to keep updated and update index
-            this.Manifest.chunks.push(...processed);
+            this.Manifest.chunks.push(...missingWrites);
+            // After every write reorder chunks
+            this.Manifest.chunks = this.Manifest.chunks.sort((a, b) => a.index - b.index);
             // Push to chunk array
-            chunks.push(...processed);
+            chunks.push(...missingWrites);
         }
         // Return the chunks
-        return chunks;
+        return chunks.sort((a, b) => a.index - b.index);
     }
 
     public async read(start: number, end: number): Promise<Buffer> {

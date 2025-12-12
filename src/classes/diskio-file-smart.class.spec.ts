@@ -1,5 +1,5 @@
 
-import { open, unlink } from 'fs/promises';
+import { open, unlink, writeFile } from 'fs/promises';
 
 import { blake3 } from "hash-wasm";
 
@@ -116,7 +116,6 @@ describe('DiskIOFileSmart class', () => {
             const manifestBackup = diskIOFileSmartBackup.manifest;
             // Expects it works
             const { chunks } = manifest;
-
             try {
                 expect(chunks).toEqual(videoBResult);
                 // Update because now has 2 ref each chunk
@@ -449,6 +448,51 @@ describe('DiskIOFileSmart class', () => {
             await diskIOFileSmart.close();
             // Expects it works
             expect(newHash).toBe(hash);
+        });
+
+        it('should join 2 files, write, read and check the half of the whole read is the same as the original', async () => {
+            // Instance it
+            const diskIOFileSmart = new DiskIOFileSmart(diskio);
+            // Wait to be ready
+            await diskIOFileSmart.ready;
+            // Read a file
+            const file = await open('./mocks/video-a.mp4', 'r+');
+            // Read the file
+            const buffer = await file.readFile();
+            // Close the file
+            await file.close();
+            // Get original hash
+            const hash = await blake3(buffer);
+            // Contated file (it will generate repeated chunks)
+            const concated = Buffer.concat([buffer, buffer]);
+            // Write the file
+            await diskIOFileSmart.write(concated);
+            // Flush to assure file is fully wrote
+            await diskIOFileSmart.flush();
+            // Write again the same looking for a collision
+            await diskIOFileSmart.write(concated);
+            // Flush again
+            await diskIOFileSmart.flush();
+            // Close the file
+            await diskIOFileSmart.close();
+            // Create a new file from the manifest
+            const diskIOFileSmart2 = new DiskIOFileSmart(diskio, diskIOFileSmart.manifest);
+            // Wait to be ready
+            await diskIOFileSmart2.ready;
+            // Read the file
+            const buffer2 = await diskIOFileSmart2.read(0, buffer.length);
+            // // Clean up
+            await diskIOFileSmart2.delete();
+            await diskIOFileSmart2.close();
+            // Check every slice has the same hash
+            for (let i = 0; i < buffer2.length / buffer.length; i ++) {
+                const from = i * buffer.length;
+                const to = from + buffer.length;
+                const sliced = buffer2.subarray(from, to);
+                const slicedHash = await blake3(sliced);
+
+                expect(slicedHash).toBe(hash);
+            }
         });
     });
 });
