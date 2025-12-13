@@ -129,8 +129,10 @@ export class DiskIOFileSmart {
         }
         // Check if there is missing chunks
         if (missing.length) {
+            // Remove repeated hashes to create files
+            const hashes = [...new Set(missing.map(({ hash }) => hash))];
             // Execute a createBatch
-            const files = await this.diskio.createBatch(missing.map(({ hash }) => hash));
+            const files = await this.diskio.createBatch(hashes);
             // Add data to files
             const promises = files.map(async ({ name, file }) => {
                 const { data, index } = missing.find(({ hash }) => hash === name) || {};
@@ -161,12 +163,19 @@ export class DiskIOFileSmart {
                 }
                 this.fhs.set(hash, part.file);
             });
+            const toAdd = missing.map(({ hash }) => {
+                const writed = missingWrites.find((chunk) => chunk.hash === hash);
+                if (!writed) {
+                    throw new Error('File corrupted!');
+                }
+                return writed;
+            });
             // Push chunks to the manifest to keep updated and update index
-            this.Manifest.chunks.push(...missingWrites);
+            this.Manifest.chunks.push(...toAdd);
             // After every write reorder chunks
             this.Manifest.chunks = this.Manifest.chunks.sort((a, b) => a.index - b.index);
             // Push to chunk array
-            chunks.push(...missingWrites);
+            chunks.push(...toAdd);
         }
         // Return the chunks
         return chunks.sort((a, b) => a.index - b.index);
