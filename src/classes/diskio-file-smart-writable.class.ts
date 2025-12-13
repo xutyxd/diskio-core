@@ -12,7 +12,7 @@ export class DiskIOFileSmartWritable extends Writable {
     async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void) {
         try {
             // Write the chunk
-            await this.file.write(chunk);             
+            await this.file.write(chunk);
             // Signal backpressure: TCP socket will pause until we call callback()
             callback();
         } catch (err) {

@@ -3,49 +3,83 @@ import { Readable, ReadableOptions } from "node:stream";
 import { IChunkManifest } from "../interfaces/chunk-manifest.interface";
 import { DiskIOFileSmart } from "./diskio-file-smart.class";
 
+interface IBatch {
+    start: number;
+    bytes: number;
+    chunks: number[]; // Which chunks belong to this batch
+}
+
 export class DiskIOFileSmartReadable extends Readable {
     private file: DiskIOFileSmart;
     private manifest: IChunkManifest[];
+    private batches: IBatch[] = [];
 
     private idx = 0;
-    private reading = false; // re-entrancy guard
 
     constructor(file: DiskIOFileSmart, opts?: ReadableOptions) {
-        super({ ...opts, highWaterMark: 2 * 1024 * 1024 }); // 2 MiB read-ahead
+        // Use 2 MiB default if not specified
+        const highWaterMark = opts?.highWaterMark ?? 2 * 1024 * 1024;
+        super({ ...opts, highWaterMark });
+
         this.file = file;
         this.manifest = file.manifest.chunks;
+        this.batches = this.toBatches(this.manifest, highWaterMark);
+    }
+
+    private toBatches(chunks: IChunkManifest[], target: number): IBatch[] {
+        const batches: IBatch[] = [];
+        let current: IBatch | null = null;
+        let offset = 0;
+
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+
+            const needChunk = current ? current.bytes + chunk.original > target : false;
+
+            // Start new batch if needed
+            if (!current || needChunk) {
+                if (current) {
+                    batches.push(current);
+                }
+
+                current = {
+                    start: offset,
+                    bytes: 0,
+                    chunks: []
+                };
+            }
+
+            current.chunks.push(i);
+            current.bytes += chunk.original;
+            offset += chunk.original;
+        }
+
+        // Push final batch
+        if (current) {
+            batches.push(current);
+        }
+
+        return batches;
     }
 
     async _read() {
-        // Check if we are already reading to avoid parallel reads
-        if (this.reading) {
+        // End of file
+        if (this.idx >= this.batches.length) {
+            this.push(null);
             return;
         }
-        // Notify that stream is finished
-        if (this.idx >= this.manifest.length) {
-            this.push(null); // EOS
-            return;
-        }
-        // Set reading flag
-        this.reading = true;
-        // Get next chunk to be readed
-        const entry = this.manifest[this.idx++];
+
+        const batch = this.batches[this.idx++];
+        
         try {
-            // Get readed until this point
-            const readed = this.manifest.slice(0, this.idx - 1).reduce((readed, current) => readed += current.original, 0);
-            // Get chunk
-            const data = await this.file.read(readed, readed + entry.original);
-            // push() returns false if internal buffer is full -> wait for 'drain'
-            const canContinue = this.push(data);
-            // Remove flag
-            this.reading = false;
-            if (canContinue) {
-                // Schedule next tick to recurse; avoids stack overflow on tiny chunks
-                setImmediate(() => this._read());
-                return;
-            }
-            // Wait for drain event to continue
-            this.once('drain', () => this._read());
+            // Read the ENTIRE batch in ONE async operation
+            // This is the key: read from startOffset to startOffset + totalBytes
+            const data = await this.file.read(
+                batch.start, 
+                batch.start + batch.bytes
+            );
+            // Push the batch data to the stream
+            this.push(data);
         } catch (err) {
             this.destroy(err as Error);
         }

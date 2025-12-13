@@ -111,6 +111,41 @@ const chunks = await file.delete();
 // These chunks are not deleted, update on DB/Whatever
 ```
 
+## DiskIO Stream
+
+### Readable
+
+```ts
+// Get manifest from DB/Whatever
+const manifest = await db.get(file_ID); 
+// Create a file
+const file = new DiskIOFileSmart(diskio, manifest);
+// Wait to be ready
+await file.ready;
+// Define a highWaterMark (optional), default is 2 MiB
+const highWaterMark = 16 * 1024 * 1024; // 16 MiB
+// Instance it
+const stream = new DiskIOFileSmartReadable(file, { highWaterMark });
+// Start streaming to whatever
+stream.pipe(whatever);
+```
+
+### Writable
+```ts
+// Get manifest from DB/Whatever
+const manifest = await db.get(file_ID); 
+// Create a file
+const file = new DiskIOFileSmart(diskio, manifest);
+// Wait to be ready
+await file.ready;
+// Define a highWaterMark (optional), default is 2 MiB
+const highWaterMark = 16 * 1024 * 1024; // 16 MiB
+// Instance it
+const stream = new DiskIOFileSmartWritable(file, { highWaterMark });
+// Start streaming from whatever
+whatever.pipe(stream);
+```
+
 ### DiskIO
 
 The `DiskIO` class is used to create an instance of the `DiskIO` class. It requires two parameters: the path to the directory where the DiskIO will be created and the amount of bytes to reserve for the DiskIO.
