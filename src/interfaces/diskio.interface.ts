@@ -6,6 +6,11 @@ export interface IDiskIO {
 
     ready: Promise<IDiskIO>;
 
+    information: {
+        disk: () => Promise<{ filesystem: string, size: number, used: number, available: number, capacity: string, mount: string }>;
+        diskio: () => Promise<{ size: number, used: number, available: number, capacity: string }>;
+    };
+
     createPath: (name: string, collision?: boolean) => string;
 
     create: (name: string, collision?: boolean) => Promise<DiskIOFile>;

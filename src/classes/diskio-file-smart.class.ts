@@ -68,117 +68,113 @@ export class DiskIOFileSmart {
     }
 
     private toTail(buffer: Buffer, before: boolean): Buffer {
-        // Create a new buffer
-        const temp = Buffer.allocUnsafe((this.tail?.length || 0) + buffer.length);
-        if (before) {
-            // First buffer
-            buffer.copy(temp);
+        if (!this.tail || this.tail.length === 0) {
+            return this.tail = buffer;
         }
-        // If there is a tail
-        if (this.tail) {
-            // Copy the tail to temporal
-            this.tail.copy(temp, before ? buffer.length : 0);
+        this.tail = Buffer.concat(before ? [buffer, this.tail] : [this.tail, buffer]);
+        return this.tail;
+    }
+
+    private async proccess(buffer: Buffer, all = false): Promise<Buffer[]> {
+        const toFingerprint = buffer.subarray(0, Math.min(buffer.length, this.FIXED_SIZE));
+        this.toTail(buffer.subarray(this.FIXED_SIZE), false);
+        
+        const rabin = await this.rabin();
+        const cutPoints = [...rabin.fingerprint(toFingerprint)];
+        
+        const parts: Buffer[] = [];
+        let offset = 0;
+    
+        for (const point of cutPoints) {
+            const len = Number(point);
+            parts.push(toFingerprint.subarray(offset, offset + len));
+            offset += len;
         }
-        if (!before) {
-            // Copy the data from the tail length
-            buffer.copy(temp, this.tail?.length || 0);
+    
+        // Handle remaining data
+        if (offset < toFingerprint.length) {
+            const remaining = toFingerprint.subarray(offset);
+            if (all) {
+                parts.push(remaining);
+            } else {
+                this.toTail(remaining, true);
+            }
         }
-        // Update the tail and return it
-        return this.tail = temp;
+        return parts;
     }
 
     private async Write(parts: Buffer[]): Promise<IChunkManifest[]> {
-        // Get already chunked
-        const chunked = this.Manifest.chunks.length;
-        const chunks: IChunkManifest[] = [];
-        // Define a missing chunk array
-        const missing: { path: string, hash: string, data: Buffer, index: number }[] = [];
-        // Iterate over the parts
-        for (const [index, part] of parts.entries()) {
-            const position = chunked + index;
-            // Get the hash
+        const startPosition = this.Manifest.chunks.length;
+        const batchChunks: IChunkManifest[] = [];
+        const missingItems: { hash: string, data: Buffer, index: number }[] = [];
+    
+        // 1. Pre-process and identify what already exists
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const position = startPosition + i;
             const hash = await blake3(part);
-            // Get possible path
-            const path = this.diskio.createPath(hash, true);
-            // Check if is already referenced
-            const reference = this.fhs.get(hash);
-            // Check if path exists
-            const exists = reference || await this.diskio.exists(join(path, hash));
-            // Push to manifest
-            if (exists) {
-                // Get fh for it
-                let fh = reference;
-
-                if (!fh) {
-                    fh = await this.diskio.get(join(path, hash));
-                    // Save the ref
+            
+            // Use the map for O(1) lookups
+            let fh = this.fhs.get(hash);
+            
+            if (!fh) {
+                const path = join(this.diskio.createPath(hash, true), hash);
+                if (await this.diskio.exists(path)) {
+                    fh = await this.diskio.get(path);
                     this.fhs.set(hash, fh);
                 }
-                // Get the size
-                const { size } = await fh.stat();
-                // Create a chunk with ref setted to 2 at least
-                const chunk = { hash, original: part.length, size: size as number, refs: 2, index: position };
-                // Push to manifest
-                this.Manifest.chunks.push(chunk);
-                // Push to chunks
-                chunks.push(chunk);
-                continue;
             }
-
-            missing.push({ path, hash, data: part, index: position });
+    
+            if (fh) {
+                const { size } = await fh.stat();
+                const chunk: IChunkManifest = { 
+                    hash, 
+                    original: part.length, 
+                    size: size as number, 
+                    refs: 2, 
+                    index: position 
+                };
+                batchChunks.push(chunk);
+            } else {
+                missingItems.push({ hash, data: part, index: position });
+            }
         }
-        // Check if there is missing chunks
-        if (missing.length) {
-            // Remove repeated hashes to create files
-            const hashes = [...new Set(missing.map(({ hash }) => hash))];
-            // Execute a createBatch
+    
+        // 2. Process missing chunks in parallel batches
+        if (missingItems.length > 0) {
+            const hashes = [...new Set(missingItems.map(m => m.hash))];
             const files = await this.diskio.createBatch(hashes);
-            // Add data to files
-            const promises = files.map(async ({ name, file }) => {
-                const { data, index } = missing.find(({ hash }) => hash === name) || {};
+    
+            const writeData = await Promise.all(missingItems.map(async (item) => {
+                const fileRef = files.find(f => f.name === item.hash);
+                if (!fileRef) throw new Error(`File creation failed for ${item.hash}`);
                 
-                if (!data || index === undefined) {
-                    throw new Error('File corrupted!');
+                const compressed = await compress(item.data, 3);
+                return {
+                    name: item.hash,
+                    file: fileRef.file,
+                    data: compressed,
+                    size: item.data.length, // Store original size
+                    index: item.index
+                };
+            }));
+    
+            const results = await this.diskio.writeBatch(writeData);
+            
+            // Add to tracking map and batch results
+            for (const res of results) {
+                const item = writeData.find(d => d.name === res.hash);
+                if (!this.fhs.has(res.hash)) {
+                    this.fhs.set(res.hash, item!.file);
                 }
-                const size = data?.length;
-                // Compress data
-                const compressed = await compress(data, 3);
-
-                return { name, file, data: compressed, size, index };
-            });
-            // Wait for all the data to be compressed
-            const withData = await Promise.all(promises);
-            // Iterate over the files
-            const missingWrites = await this.diskio.writeBatch(withData, true);
-            // Save the ref
-            missingWrites.forEach(({ hash }) => {
-                const part = withData.find(({ name }) => name === hash);
-                if (!part) {
-                    throw new Error('File corrupted!');
-                }
-                // Check if is already referenced
-                const referenced = this.fhs.has(hash);
-                if (referenced) {
-                    return;
-                }
-                this.fhs.set(hash, part.file);
-            });
-            const toAdd = missing.map(({ hash }) => {
-                const writed = missingWrites.find((chunk) => chunk.hash === hash);
-                if (!writed) {
-                    throw new Error('File corrupted!');
-                }
-                return writed;
-            });
-            // Push chunks to the manifest to keep updated and update index
-            this.Manifest.chunks.push(...toAdd);
-            // After every write reorder chunks
-            this.Manifest.chunks = this.Manifest.chunks.sort((a, b) => a.index - b.index);
-            // Push to chunk array
-            chunks.push(...toAdd);
+                batchChunks.push(res);
+            }
         }
-        // Return the chunks
-        return chunks.sort((a, b) => a.index - b.index);
+    
+        // 3. Update main manifest and return
+        // We don't sort here; we maintain index order by pushing
+        this.Manifest.chunks.push(...batchChunks);
+        return batchChunks;
     }
 
     public async read(start: number, end: number): Promise<Buffer> {
@@ -228,79 +224,43 @@ export class DiskIOFileSmart {
         return buffer;
     }
 
-    public async write(data: Buffer, isTail = false): Promise<IDiskIOFileManifest> {
+    public async write(data: Buffer): Promise<IDiskIOFileManifest> {
+    
         let buffer: Buffer;
         // Check if there is a tail
-        if (this.tail && !isTail) {
-            // Move the data to tail
+        if (this.tail) {
+            // Move the data to tail and get all of it
             buffer = this.toTail(data, false);
-            // Clear tail
-            this.tail = undefined;
         } else {
             buffer = data;
         }
         // Avoid writing small files to feed correctly rabin
-        if (buffer.length < this.FIXED_SIZE && !isTail) {
+        if (buffer.length < this.FIXED_SIZE) {
             // Overwrite tail cause maybe buffer already is tail
             this.tail = buffer;
             return { chunks: [] };
         }
-        // Fix size of the buffer if is not tail
-        if (!isTail) {
-            // Get first part
-            const toFingerprint = buffer.subarray(0, Math.min(buffer.length, this.FIXED_SIZE));
-            // Move the rest to tail
-            this.toTail(buffer.subarray(this.FIXED_SIZE), false);
-            // Set as buffer to fingerprint
-            buffer = toFingerprint;
-        }
-        // Create rabin
-        const rabin = await this.rabin();
-        // Get cut points
-        const cutPoints = [ ...rabin.fingerprint(buffer)] as unknown as number[];
-        // Get last part, it will be the tail
-        const point = buffer.length - cutPoints.reduce((total, current) => total += Number(current), 0);
-        // If need to add a point
-        if (point > 0) {
-            cutPoints.push(point);
-        }
-        // Split data to write in parts
-        let parts = cutPoints.map((point, index, self) => {
-            const numbered = Number(point);
-            // Get the previous
-            const before = self.slice(0, index).reduce((bytes, point) => bytes + Number(point), 0);
-            // Get the part
-            return buffer.subarray(before, Math.min(before + numbered, buffer.length));
-        }).filter(({ length }) => length);
-        // If there is no parts set one as default
-        if (!parts.length) {
-            parts = [ buffer ];
-        }
-        // If is not tail
-        if (!isTail) {
-            // Get last part
-            const last = parts.pop();
-            // Move it to tail
-            if (last) {
-                this.toTail(last, true);
-            } else {
-                this.tail = undefined;
-            }
-        }
+        // Clear tail because at this moment tail is on buffer
+        this.tail = Buffer.allocUnsafe(0);
+        // Proccess buffer without tail
+        const parts = await this.proccess(buffer);
         // Write parts
         const chunks = await this.Write(parts);
-        // Check if there is still tail and bigger than fixed size
-        if (!isTail && this.tail && this.tail.length > this.FIXED_SIZE) {
-            // Get diff
-            const diff = this.tail.length - this.FIXED_SIZE;
-            // Get the last part of the tail to push
-            const last = this.tail.subarray(diff);
-            // Update the tail
-            this.tail = this.tail.subarray(0, diff);
-            // Write the tail
-            const tail = await this.write(last); // It will be pushed to tail again
-            // Update the chunks
-            chunks.push(...tail.chunks);
+        // Check if there is still tail
+        if (this.tail) {
+            // Proccess tail until it is smaller than fixed size
+            while (this.tail.length > this.FIXED_SIZE) {
+               // Get all tail to process
+               const buffer = this.tail;
+               // Clear tail
+               this.tail = Buffer.allocUnsafe(0);
+               // Process the tail
+               const parts = await this.proccess(buffer);
+               // Write parts
+               const tail = await this.Write(parts);
+               // Update the chunks
+               chunks.push(...tail);
+            }
         }
         // Create a manifest
         const manifest: IDiskIOFileManifest = { chunks };
@@ -315,16 +275,18 @@ export class DiskIOFileSmart {
             return;
         }
         // Write the tail
-        const wrote = await this.write(this.tail, true);
+        const proccessed = await this.proccess(this.tail, true);
+        const chunks = await this.Write(proccessed);
         // Clean the tail
         this.tail = undefined;
-        // Update the chunk
-        const { chunks } = wrote;
         // Return the manifest
         return chunks;
     }
 
     public get manifest() {
+        // Sort chunks
+        this.Manifest.chunks = this.Manifest.chunks.sort((a, b) => a.index - b.index);
+        // Return manifest
         return structuredClone(this.Manifest);
     }
 

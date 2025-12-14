@@ -5,10 +5,40 @@ export class DiskIOFileSmartWritable extends Writable {
     private file: DiskIOFileSmart;
 
     constructor(file: DiskIOFileSmart, opts?: WritableOptions) {
-        super({ ...opts, highWaterMark: 1024 * 1024 }); // 1 MiB backpressure window
+        // Use 2 MiB default if not specified
+        const highWaterMark = opts?.highWaterMark ?? 2 * 1024 * 1024;
+        super({ ...opts, highWaterMark });
         this.file = file;
     }
-    // Called by the framework for each buffer from the HTTP body
+    /**
+     * Called by Node.js when multiple chunks are buffered.
+     * This is your batching point!
+     */
+    async _writev(
+        chunks: Array<{ chunk: Buffer; encoding: string }>,
+        callback: (err?: Error) => void
+    ) {
+        try {
+            // Concatenate all chunks into one large Buffer
+            const toAllocate = chunks.reduce((sum, item) => sum + item.chunk.length, 0);
+            const batch = Buffer.allocUnsafe(toAllocate);
+            
+            let offset = 0;
+            for (const item of chunks) {
+                item.chunk.copy(batch, offset);
+                offset += item.chunk.length;
+            }
+            // Single write operation for the entire batch
+            await this.file.write(batch);
+            callback();
+        } catch (err) {
+            callback(err as Error);
+        }
+    }
+    /**
+     * Fallback for single chunks when buffer isn't full enough.
+     * Rarely called if source is faster than disk.
+     */
     async _write(chunk: Buffer, encoding: string, callback: (err?: Error) => void) {
         try {
             // Write the chunk
