@@ -18,6 +18,8 @@ export class DiskIO implements IDiskIO {
 
     private path: { folder: string, diskio: string };
 
+    private virtual = 0;
+
     protected optimal = 4096;
 
     private depth;
@@ -56,7 +58,17 @@ export class DiskIO implements IDiskIO {
         this.depth = depth;
         // Stabilize the diskio space
         this.ready = (async () => {
-            await this.stabilize(size);
+            // Get folder size
+            const folder = await this.size.folder();
+            // Set virtual as size
+            this.virtual = folder;
+            // Stabilize the diskio space
+            await this.stabilize(this!.RESERVED_SIZE);
+            // Get the new diskio size
+            const diskio = await this.size.diskio();
+            // Update virtual with the new size
+            this.virtual = this!.RESERVED_SIZE - diskio; // Diskio at this moment is total size or total - written
+            // Get optimal size for this disk
             this.optimal = await this.size.block();
             // Return itself
             return this;
@@ -96,6 +108,9 @@ export class DiskIO implements IDiskIO {
             const [size] = cleaned;
 
             return Number(size);
+        },
+        virtual: () => {
+            return this.virtual;
         }
     }
 
@@ -140,10 +155,9 @@ export class DiskIO implements IDiskIO {
                 await writeFile(this.path.diskio, Buffer.alloc(0));
             });
         }
-        const diskio = await this.size.diskio();
-        const folder = await this.size.folder();
-        const difference = expected - folder + diskio;
 
+        const written = this.size.virtual();
+        const difference = expected - written;
         await withLock(async () => {
             // Truncate the difference
             await truncate(this.path.diskio, difference);
@@ -226,7 +240,7 @@ export class DiskIO implements IDiskIO {
         const path = this.createPath(name, collision);
         const relative = join(this.path.folder, path);
         // Folders required to create the file
-        await mkdir(relative, { recursive: true });
+        const created = await mkdir(relative, { recursive: true });
         // Create file path
         const filePath = join(relative, name);
         // Check if file exists
@@ -234,7 +248,7 @@ export class DiskIO implements IDiskIO {
             // Recall trying to get a new path without the file
             return this.create(name, collision);
         }
-        // Create the file (not locked because empty file not consume space)
+        // Create the file
         await writeFile(filePath, Buffer.alloc(0));
         // Return the file
         return this.get(filePath.replace(this.path.folder, ''));
@@ -268,7 +282,7 @@ export class DiskIO implements IDiskIO {
         const path = this.createPath(name, collision);
         const relative = join(this.path.folder, path);
         // Folders required to create the file
-        mkdirSync(relative, { recursive: true });
+        const created = mkdirSync(relative, { recursive: true });
         // Create file path
         const filePath = join(relative, name);
         // Check if file exists
@@ -451,8 +465,10 @@ export class DiskIO implements IDiskIO {
             // Increment the index
             index++;
         }
-
-        await Promise.all(promises);
+        // Await for all the promises
+        const awaited = await Promise.all(promises);
+        // Update virtual
+        this.virtual += awaited.reduce((bytes, { bytesWritten }) => bytes + bytesWritten, 0);
     }
 
     public async write(fh: FileHandle, data: Buffer, position: number) {
@@ -478,13 +494,19 @@ export class DiskIO implements IDiskIO {
             // Calculate how many bytes to write
             const toWrite = this.optimal > remaining ? remaining : this.optimal;
             // Write the buffer
-            writeSync(fh.fd, data, offset, toWrite, position + offset);
+            const written = writeSync(fh.fd, data, offset, toWrite, position + offset);
+            // Update virtual
+            this.virtual += written;
             // Increment the index
             index++;
         }
     }
 
     protected async Delete(fh: FileHandle, name: string[]) {
+        // Get the file size
+        const { size } = await fh.stat();
+        // Update virtual
+        this.virtual -= size;
         // Close the file handle
         await fh.close();
         const path = join(this.path.folder, ...name);

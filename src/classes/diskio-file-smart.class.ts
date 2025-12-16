@@ -203,8 +203,8 @@ export class DiskIOFileSmart {
         }).filter((instruction): instruction is Exclude<typeof instruction, undefined> => Boolean(instruction));
         // Iterate over the instructions
         const promises = instructions.map(async ({ chunk, from, to }, index, original) => {
-            // Calculate probably wrote bytes
-            const wrote = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (to - from), 0);
+            // Calculate probably written bytes
+            const written = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (to - from), 0);
             // Get the file
             const fh = this.fhs.get(chunk.hash);
             // Check file handle exists
@@ -216,7 +216,7 @@ export class DiskIOFileSmart {
             // Decompress the chunk
             const decompressed = await decompress(readed);
             // Read the part of the chunk
-            decompressed.copy(buffer, wrote, from, to);
+            decompressed.copy(buffer, written, from, to);
         });
         // Wait for all the instructions to be executed
         await Promise.all(promises);

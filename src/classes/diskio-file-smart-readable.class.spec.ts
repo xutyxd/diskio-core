@@ -75,7 +75,7 @@ describe('DiskIOFileSmartReadable class', () => {
             expect(readedHash).toBe(hash);
         });
 
-        it('should read a file wrote 2 times', async () => {
+        it('should read a file written 2 times', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -133,7 +133,7 @@ describe('DiskIOFileSmartReadable class', () => {
             const hash = await blake3(buffer);
             // Write the file
             await diskIOFileSmart.write(buffer);
-            // Flush to assure file is fully wrote
+            // Flush to assure file is fully written
             await diskIOFileSmart.flush();
             // Close the file
             await file.close();

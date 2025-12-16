@@ -75,9 +75,11 @@ describe('DiskIOFileSmart class', () => {
             const manifest = diskIOFileSmart.manifest;
             // Expects it works
             const { chunks } = manifest;
+            const { used } = await diskio.information.diskio();
 
             try {
                 expect(chunks).toEqual(videoAResult);
+                expect(diskio['virtual']).toBe(used);
             } finally {
                 // Clean up
                 await diskIOFileSmart.delete();
@@ -178,7 +180,7 @@ describe('DiskIOFileSmart class', () => {
             expect(readedHash).toBe(hash);
         });
 
-        it('should read a file wrote 2 times', async () => {
+        it('should read a file written 2 times', async () => {
             // Instance it
             const diskIOFileSmart = new DiskIOFileSmart(diskio);
             // Wait to be ready
@@ -398,7 +400,7 @@ describe('DiskIOFileSmart class', () => {
             const hash = await blake3(buffer);
             // Write the file
             await diskIOFileSmart.write(buffer);
-            // Flush to assure file is fully wrote
+            // Flush to assure file is fully written
             await diskIOFileSmart.flush();
             // Close the file
             await file.close();
@@ -429,7 +431,7 @@ describe('DiskIOFileSmart class', () => {
             const hash = await blake3(buffer);
             // Write the file
             await diskIOFileSmart.write(buffer);
-            // Flush to assure file is fully wrote
+            // Flush to assure file is fully written
             await diskIOFileSmart.flush();
             // Close the file
             await file.close();
@@ -467,7 +469,7 @@ describe('DiskIOFileSmart class', () => {
             const concated = Buffer.concat([buffer, buffer]);
             // Write the file
             await diskIOFileSmart.write(concated);
-            // Flush to assure file is fully wrote
+            // Flush to assure file is fully written
             await diskIOFileSmart.flush();
             // Write again the same looking for a collision
             await diskIOFileSmart.write(concated);
