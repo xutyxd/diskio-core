@@ -290,6 +290,10 @@ export class DiskIOFileSmart {
         return structuredClone(this.Manifest);
     }
 
+    public get size() {
+        return this.Manifest.chunks.reduce((bytes, chunk) => bytes + chunk.original, 0);
+    }
+
     public async delete(): Promise<IChunkManifest[]> {
         // Get alone chunks
         const alones: DiskIOFile[] = [];

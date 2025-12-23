@@ -15,6 +15,8 @@ export class DiskIOFileSmartReadable extends Readable {
     private batches: IBatch[] = [];
 
     private idx = 0;
+    
+    public size;
 
     constructor(file: DiskIOFileSmart, opts?: ReadableOptions) {
         // Use 2 MiB default if not specified
@@ -24,6 +26,7 @@ export class DiskIOFileSmartReadable extends Readable {
         this.file = file;
         this.manifest = file.manifest.chunks;
         this.batches = this.toBatches(this.manifest, highWaterMark);
+        this.size = file.size;
     }
 
     private toBatches(chunks: IChunkManifest[], target: number): IBatch[] {
