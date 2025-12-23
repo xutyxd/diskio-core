@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/xutyxd/diskio">
+  <a href="https://github.com/xutyxd/diskio-core">
     <picture>
       <source srcset="diskio-logo.png" width="150">
       <img alt="diskio logo" src="./diskio-logo.png" width="150">
@@ -295,4 +295,4 @@ await file.delete();
 
 ## License
 
-This project is licensed under this [GNU AFFERO GENERAL PUBLIC LICENSE](https://github.com/xutyxd/diskio/blob/main/LICENSE).
+This project is licensed under this [GNU AFFERO GENERAL PUBLIC LICENSE](https://github.com/xutyxd/diskio-core/blob/main/LICENSE).
