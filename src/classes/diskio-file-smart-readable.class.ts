@@ -18,24 +18,37 @@ export class DiskIOFileSmartReadable extends Readable {
     
     public size;
 
-    constructor(file: DiskIOFileSmart, opts?: ReadableOptions) {
+    constructor(file: DiskIOFileSmart, opts?: ReadableOptions & { from?: number, to?: number }) {
         // Use 2 MiB default if not specified
         const highWaterMark = opts?.highWaterMark ?? 2 * 1024 * 1024;
         super({ ...opts, highWaterMark });
 
         this.file = file;
         this.manifest = file.manifest.chunks;
-        this.batches = this.toBatches(this.manifest, highWaterMark);
+        this.batches = this.toBatches(this.manifest, { target: highWaterMark, from: opts?.from, to: opts?.to });
         this.size = file.size;
     }
 
-    private toBatches(chunks: IChunkManifest[], target: number): IBatch[] {
+    private toBatches(chunks: IChunkManifest[], configuration: { target: number, from?: number, to?: number }): IBatch[] {
         const batches: IBatch[] = [];
         let current: IBatch | null = null;
+        const target = configuration.target;
         let offset = 0;
+        const start = configuration.from ?? 0;
+        const end = configuration.to ?? this.size;
 
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
+            const nextEnd = offset + chunk.original;
+            // Check if chunk is out of range
+            if (nextEnd <= start) {
+                offset += chunk.original;
+                continue;
+            }
+
+            if (nextEnd >= end) {
+                break;
+            }
 
             const needChunk = current ? current.bytes + chunk.original > target : false;
 
@@ -54,6 +67,15 @@ export class DiskIOFileSmartReadable extends Readable {
 
             current.chunks.push(i);
             current.bytes += chunk.original;
+
+            if (offset + chunk.original > end) {
+                // Calculate exactly how many bytes of this batch are actually valid
+                const needed = end - current.start;
+                // Update the current chunk
+                current.bytes = needed;
+                break; // We are done!
+            }
+
             offset += chunk.original;
         }
 

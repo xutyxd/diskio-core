@@ -49,9 +49,9 @@
   "author": "XutyXD",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/xutyxd/diskio/issues"
+    "url": "https://github.com/xutyxd/diskio-core/issues"
   },
-  "homepage": "https://github.com/xutyxd/diskio#readme",
+  "homepage": "https://github.com/xutyxd/diskio-core#readme",
   "devDependencies": {
     "@semantic-release/github": "^9.0.6",
     "@semantic-release/gitlab": "^9.2.0",
