@@ -157,7 +157,7 @@ export class DiskIO implements IDiskIO {
         }
 
         const written = this.size.virtual();
-        const difference = expected - written;
+        const difference = expected - written;        
         await withLock(async () => {
             // Truncate the difference
             await truncate(this.path.diskio, difference);
@@ -255,14 +255,8 @@ export class DiskIO implements IDiskIO {
     }
 
     public async create(name: string, collision = false): Promise<DiskIOFile> {
-        // Get the path for the file
-        const path = this.createPath(name, collision);
-        // Count all folders
-        const folders = path.split('/').filter(Boolean).length;
-        // Allocate maximum possible space
-        await this.allocate(folders * this.optimal);
         // Create the file
-        const file = this.Create(name, collision);
+        const file = await this.Create(name, collision);
         // Stabilize the diskio space, maybe not all allocated space is used
         await this.stabilize(this.RESERVED_SIZE);
         // Return the file

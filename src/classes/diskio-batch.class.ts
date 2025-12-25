@@ -10,10 +10,6 @@ export class DiskIOBatch extends DiskIO implements IDiskIOBatch {
     public async createBatch(names: string[]): Promise<{ name: string, file: DiskIOFile }[]> {
         // Get the path for every file
         const paths = names.map((name) => ({ name, path: this.createPath(name, true) }));
-        // Count all folders
-        const folders = paths.map(({ path }) => path.split('/').filter(Boolean).length).reduce((total, current) => total + current, 0);
-        // Allocate maximum possible space
-        await this.allocate(folders * this.optimal);
         // Create the files
         const promises = paths.map(async ({ name }) => {
             const file = await this.Create(name, true);
@@ -22,8 +18,6 @@ export class DiskIOBatch extends DiskIO implements IDiskIOBatch {
         });
         // Wait for all files to be created
         const files = await Promise.all(promises);
-        // Stabilize the diskio space, maybe not all allocated space is used
-        await this.stabilize(this.RESERVED_SIZE);
         // Return the files
         return files;
     }
