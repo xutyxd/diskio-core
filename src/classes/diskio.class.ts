@@ -140,6 +140,9 @@ export class DiskIO implements IDiskIO {
             const size = this.RESERVED_SIZE - this.optimal;
             const available = await this.size.diskio();
             const used = await this.size.folder() - available;
+            // Update virtual with real used size
+            this.virtual = used;
+            
             const capacity = Math.round(100 - (used / size) * 100);
 
             return {
