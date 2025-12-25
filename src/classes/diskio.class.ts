@@ -58,16 +58,17 @@ export class DiskIO implements IDiskIO {
         this.depth = depth;
         // Stabilize the diskio space
         this.ready = (async () => {
-            // Get folder size
+            // Get folder size (Includes diskio file)
             const folder = await this.size.folder();
+            // Get diskio size
+            const diskio = await this.size.diskio();
             // Set virtual as size
-            this.virtual = folder;
+            this.virtual = folder - diskio;
             // Stabilize the diskio space
             await this.stabilize(this!.RESERVED_SIZE);
-            // Get the new diskio size
-            const diskio = await this.size.diskio();
+            const stabilized = await this.size.diskio();
             // Update virtual with the new size
-            this.virtual = this!.RESERVED_SIZE - diskio; // Diskio at this moment is total size or total - written
+            this.virtual = this!.RESERVED_SIZE - stabilized; // Diskio at this moment is total size or total - written
             // Get optimal size for this disk
             this.optimal = await this.size.block();
             // Return itself
@@ -81,9 +82,13 @@ export class DiskIO implements IDiskIO {
             return Number(stdout);
         },
         diskio: async () => {
-            const status = await stat(this.path.diskio);
-            // Get diskio file size
-            const { size } = status;
+            let size = 0;
+
+            try {
+                const status = await stat(this.path.diskio);
+                // Get diskio file size
+                size = status.size;
+            } catch { }
 
             return size;
         },
