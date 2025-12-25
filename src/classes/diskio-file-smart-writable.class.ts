@@ -60,4 +60,15 @@ export class DiskIOFileSmartWritable extends Writable {
             callback(err as Error);
         }
     }
+
+    async _destroy(err: Error | null, callback: (error?: Error | null) => void) {
+        try {
+            if (err) {
+                await this.file.close();
+            }
+        } catch (err) {
+            // Ignore
+        }
+        callback(err);
+    }
 }
