@@ -475,8 +475,6 @@ describe('DiskIOFileSmart class', () => {
             await diskIOFileSmart.write(concated);
             // Flush again
             await diskIOFileSmart.flush();
-            // Close the file
-            await diskIOFileSmart.close();
             // Create a new file from the manifest
             const diskIOFileSmart2 = new DiskIOFileSmart(diskio, diskIOFileSmart.manifest);
             // Wait to be ready
@@ -484,7 +482,8 @@ describe('DiskIOFileSmart class', () => {
             // Read the file
             const buffer2 = await diskIOFileSmart2.read(0, buffer.length);
             // // Clean up
-            await diskIOFileSmart2.delete();
+            await diskIOFileSmart.delete();
+            await diskIOFileSmart.close();
             await diskIOFileSmart2.close();
             // Check every slice has the same hash
             for (let i = 0; i < buffer2.length / buffer.length; i ++) {

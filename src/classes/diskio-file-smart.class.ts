@@ -1,9 +1,11 @@
 import { join } from 'node:path';
-import Rabin, { create } from 'rabin-wasm';
 
+import Rabin, { create } from 'rabin-wasm';
 import { blake3 } from "hash-wasm";
 
 import { compress, decompress } from '@mongodb-js/zstd'
+
+import { withoutError } from '../common/without-error';
 
 import { IDiskIOFileManifest } from "../interfaces/diskio-file-manifest.interface";
 import { IChunkManifest } from '../interfaces/chunk-manifest.interface';
@@ -18,6 +20,7 @@ export class DiskIOFileSmart {
     private Manifest: IDiskIOFileManifest;
 
     private fhs: Map<string, DiskIOFile> = new Map();
+
     private tail?: Buffer;
 
     public ready: Promise<DiskIOFileSmart>;
@@ -25,31 +28,29 @@ export class DiskIOFileSmart {
     constructor(private diskio: IDiskIOBatch, manifest?: IDiskIOFileManifest) {
         // Create a copy of the manifest
         this.Manifest = structuredClone(manifest || { chunks: [] });
-        const self = this;
         this.ready = (async () => {
-            // Await for the diskio to be ready
             await diskio.ready;
-            // Iterate over the chunks with a map
-            const promises = self.Manifest.chunks.map(async (chunk) => {
-                // Get path
-                const path = self.diskio.createPath(chunk.hash, true);
-                // Get full path
-                const fullPath = join(path, chunk.hash);
-                // Get the file forcing to exists
-                const file = await self.diskio.get(fullPath, true);
-                // Check if is already setted
-                if (self.fhs.has(chunk.hash)) {
-                    await file.close();
-                    return;
-                }
-                // Add the file to the map
-                self.fhs.set(chunk.hash, file);
-            });
-            // Wait for all the files to be ready
-            await Promise.all(promises);
-            // Return itself
-            return self;
+            return this;
         })();
+    }
+
+    private async getFh(hash: string): Promise<DiskIOFile> {
+        // Use the map for O(1) lookups
+        let fh = this.fhs.get(hash);
+            
+        if (!fh) {
+            const path = join(this.diskio.createPath(hash, true), hash);
+            if (await this.diskio.exists(path)) {
+                fh = await this.diskio.get(path);
+                this.fhs.set(hash, fh);
+            }
+        }
+
+        if (!fh) {
+            throw new Error('File corrupted!');
+        }
+
+        return fh;
     }
 
     private async rabin(): Promise<Rabin> {
@@ -113,19 +114,8 @@ export class DiskIOFileSmart {
             const part = parts[i];
             const position = startPosition + i;
             const hash = await blake3(part);
-            
-            // Use the map for O(1) lookups
-            let fh = this.fhs.get(hash);
-            
-            if (!fh) {
-                const path = join(this.diskio.createPath(hash, true), hash);
-                if (await this.diskio.exists(path)) {
-                    fh = await this.diskio.get(path);
-                    this.fhs.set(hash, fh);
-                }
-            }
-    
-            if (fh) {
+            try {
+                const fh = await this.getFh(hash);
                 const { size } = await fh.stat();
                 const chunk: IChunkManifest = { 
                     hash, 
@@ -135,7 +125,7 @@ export class DiskIOFileSmart {
                     index: position 
                 };
                 batchChunks.push(chunk);
-            } else {
+            } catch {
                 missingItems.push({ hash, data: part, index: position });
             }
         }
@@ -206,11 +196,7 @@ export class DiskIOFileSmart {
             // Calculate probably written bytes
             const written = original.slice(0, index).reduce((bytes, { from, to }) => bytes + (to - from), 0);
             // Get the file
-            const fh = this.fhs.get(chunk.hash);
-            // Check file handle exists
-            if (!fh) {
-                throw new Error('File corrupted!');
-            }
+            const fh = await this.getFh(chunk.hash);
             // Read the whole chunk to decompress it
             const readed = await fh.read(0, chunk.size);
             // Decompress the chunk
@@ -299,21 +285,20 @@ export class DiskIOFileSmart {
         const alones: DiskIOFile[] = [];
         // Get referenced on other files
         const referenced: IChunkManifest[] = [];
-        // Iterate to split
-        this.Manifest.chunks.forEach((chunk) => {
+        // Iterate to get alones
+        const promises = this.Manifest.chunks.map(async (chunk) => {
             // Push if hash more references
             if (chunk.refs > 1) {
                 referenced.push(chunk);
-            };
-            // Find it file
-            const file = this.fhs.get(chunk.hash);
-            // Check not corrupted
-            if (!file) {
-                return;
             }
-            // Push to alones
-            alones.push(file);
+            withoutError(async () => {
+                const fh = await this.getFh(chunk.hash);
+                // Push to alones
+                alones.push(fh);
+            });
         });
+        // Wait for all
+        await Promise.all(promises);
         // Delete all the files
         await this.diskio.deleteBatch(alones);
         // Return references
